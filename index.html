@@ -425,6 +425,8 @@ function selectSessionIdx(i) {
   sessionSelIdx = i;
   renderSessionTabs();
   renderSessionCode();
+  // 回を切り替えたら出席一覧も更新
+  if (window._lastAllData) renderAttendance(window._lastAllData);
 }
 
 function renderSessionCode() {
@@ -477,6 +479,7 @@ async function stopSession() {
 
 // 出席者一覧
 function renderAttendance(allData) {
+  window._lastAllData = allData; // 全データをキャッシュ
   const records = allData[sessionSelIdx] ? Object.entries(allData[sessionSelIdx]) : [];
   document.getElementById("att-count").textContent = records.length + "名";
   document.getElementById("csv-btn").style.display = records.length ? "" : "none";
