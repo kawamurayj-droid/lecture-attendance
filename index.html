@@ -154,6 +154,7 @@
   <div class="page" id="page-list">
     <div class="flex-row" style="margin-bottom:18px">
       <p class="sec" style="margin:0">科目一覧</p>
+      <span id="teacher-badge" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
       <button class="btn btn-pri" style="margin-left:auto" onclick="showPage('edit',null)">＋ 科目追加</button>
     </div>
     <div id="course-list-body"></div>
@@ -167,7 +168,11 @@
       <input type="hidden" id="edit-id">
       <div class="field"><label class="lbl">科目名</label><input id="edit-name" placeholder="例：社会福祉概論"></div>
       <div class="field"><label class="lbl">教室</label><input id="edit-room" placeholder="例：A301"></div>
-      <div class="field"><label class="lbl">担当者</label><input id="edit-instructor" placeholder="例：河村 太郎"></div>
+      <div class="field"><label class="lbl">担当者（表示名）</label><input id="edit-instructor" placeholder="例：河村 太郎"></div>
+      <div class="field" id="teacher-check-field" style="display:none">
+        <label class="lbl">担当教員（複数選択可）</label>
+        <div id="teacher-checkboxes" style="display:flex;flex-wrap:wrap;gap:10px;padding:8px 0"></div>
+      </div>
       <div class="field"><label class="lbl">講義回数</label><input id="edit-sessions" type="number" min="1" max="30" value="15"></div>
       <div class="flex-row" style="margin-top:6px">
         <button class="btn btn-pri" onclick="saveCourse()">保存</button>
@@ -300,12 +305,28 @@ function goBack() {
              : "home";
   stopTimerLoop();
   if (attUnsubscribe) { attUnsubscribe(); attUnsubscribe = null; }
+  if (dest === "home") currentTeacher = null;
   showPage(dest);
 }
 
 // ── PIN ───────────────────────────────────────────────────────────
+// ── 教員マスタ ───────────────────────────────────────────────────
+const TEACHERS = {
+  "7373": { id: "kawamura",  name: "河村" },
+  "3986": { id: "otani",     name: "大谷" },
+  "2940": { id: "hashimoto", name: "橋本拓" },
+  "7986": { id: "nabeta",    name: "鍋田" },
+};
+const ADMIN_PIN = "1234";
+let currentTeacher = null; // { id, name } or { id:"admin", name:"管理者" }
+
 function checkPin() {
-  if (document.getElementById("pin-input").value === "1234") {
+  const pin = document.getElementById("pin-input").value;
+  if (pin === ADMIN_PIN) {
+    currentTeacher = { id: "admin", name: "管理者" };
+    showPage("list");
+  } else if (TEACHERS[pin]) {
+    currentTeacher = TEACHERS[pin];
     showPage("list");
   } else {
     const el = document.getElementById("pin-err");
@@ -319,7 +340,16 @@ function pinErr() { document.getElementById("pin-err").classList.remove("show");
 // ── 科目一覧 ──────────────────────────────────────────────────────
 function renderCourseList() {
   const el = document.getElementById("course-list-body");
-  const entries = Object.entries(courses);
+  // ログイン中の教員名バッジ
+  const badge = document.getElementById("teacher-badge");
+  if (badge && currentTeacher) badge.textContent = `ログイン中：${currentTeacher.name}`;
+
+  // 管理者は全科目、教員は自分の科目だけ
+  const entries = Object.entries(courses).filter(([id, c]) => {
+    if (currentTeacher?.id === "admin") return true;
+    const ids = c.teacherIds || (c.teacherId ? [c.teacherId] : []);
+    return ids.includes(currentTeacher?.id);
+  });
   if (entries.length === 0) {
     el.innerHTML = `<div class="alert alert-info show">科目が登録されていません。「科目追加」から登録してください。</div>`;
     return;
@@ -333,6 +363,7 @@ function renderCourseList() {
         <span class="tag tag-green">👤 ${esc(c.instructor)}</span>
         <span class="tag tag-yellow">📅 全${c.sessions}回</span>
         ${active ? '<span class="tag tag-red">● 受付中</span>' : ""}
+        ${currentTeacher?.id === "admin" ? `<span class="tag" style="background:#88888822;color:#888;border:1px solid #88888833">🔑 ${(c.teacherIds||[c.teacherId||""]).map(tid=>getTeacherName(tid)).join("・")}</span>` : ""}
       </div>
       <div class="course-actions">
         <button class="btn btn-pri btn-sm" onclick="showPage('session','${id}')">セッション管理</button>
@@ -354,6 +385,22 @@ function openEdit(idOrNull) {
   document.getElementById("edit-instructor").value       = c?.instructor || "";
   document.getElementById("edit-sessions").value         = c?.sessions   || 15;
   document.getElementById("edit-err").classList.remove("show");
+
+  // 管理者のみ担当教員選択を表示
+  const checkField = document.getElementById("teacher-check-field");
+  const checkboxes = document.getElementById("teacher-checkboxes");
+  if (currentTeacher?.id === "admin") {
+    checkField.style.display = "";
+    const teacherIds = c?.teacherIds || (c?.teacherId ? [c.teacherId] : []);
+    checkboxes.innerHTML = Object.entries(TEACHERS).map(([pin, t]) => `
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer">
+        <input type="checkbox" value="${t.id}" ${teacherIds.includes(t.id) ? "checked" : ""}
+          style="width:16px;height:16px;margin:0;accent-color:var(--accent)">
+        ${t.name}
+      </label>`).join("");
+  } else {
+    checkField.style.display = "none";
+  }
 }
 
 async function saveCourse() {
@@ -365,7 +412,17 @@ async function saveCourse() {
   if (!name || !room || !instructor || !sessions) {
     showEditErr("すべての項目を入力してください"); return;
   }
-  const data = { name, room, instructor, sessions };
+  // 担当教員IDリストを決定
+  let teacherIds;
+  if (currentTeacher?.id === "admin") {
+    // 管理者：チェックボックスから取得
+    const checked = Array.from(document.querySelectorAll("#teacher-checkboxes input:checked")).map(el => el.value);
+    teacherIds = checked.length > 0 ? checked : (id && courses[id]?.teacherIds) || [];
+  } else {
+    // 一般教員：自分のIDを維持（既存があれば引き継ぐ）
+    teacherIds = id && courses[id]?.teacherIds ? courses[id].teacherIds : [currentTeacher?.id || ""];
+  }
+  const data = { name, room, instructor, sessions, teacherIds };
   try {
     if (id) await db.ref(`courses/${id}`).update(data);
     else    await db.ref("courses").push(data);
@@ -606,6 +663,11 @@ async function submitAttendance() {
 
 // ── utils ────────────────────────────────────────────────────────
 function genCode() { return String(Math.floor(1000 + Math.random() * 9000)); }
+function getTeacherName(tid) {
+  if (!tid || tid === "admin") return "管理者";
+  const t = Object.values(TEACHERS).find(t => t.id === tid);
+  return t ? t.name : tid;
+}
 function cookieKey(courseId, idx) { return `registered_${courseId}_${idx}`; }
 function hasCookie(key) { return document.cookie.split(";").some(c => c.trim().startsWith(key + "=")); }
 function setCookie(key) {
