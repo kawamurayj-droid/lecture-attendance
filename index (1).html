@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>講義出席管理システム</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-database-compat.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:      #f4f6fb;
+    --bg2:     #ffffff;
+    --bg3:     #f0f2f8;
+    --border:  #dde1ee;
+    --text:    #1a1d2e;
+    --muted:   #7a7f99;
+    --sub:     #4a4f6a;
+    --accent:  #4f5bd5;
+    --green:   #19a85a;
+    --red:     #e03c3c;
+    --yellow:  #c97a00;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Mono','Courier New',monospace; min-height: 100vh; }
+
+  /* ── header ── */
+  header { background: var(--accent); border-bottom: 1px solid #3a4ac0; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 14px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #fff; }
+  header p  { font-size: 11px; color: #c0c8ff; letter-spacing: 1px; margin-top: 2px; }
+  #back-btn { margin-left: auto; }
+
+  /* ── layout ── */
+  .wrap { max-width: 860px; margin: 0 auto; padding: 28px 16px; }
+
+  /* ── card ── */
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 4px #0000000a; }
+  .sec  { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+
+  /* ── buttons ── */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; font-family: inherit; transition: opacity .15s; }
+  .btn:hover { opacity: .85; }
+  .btn-pri   { background: var(--accent); color: #fff; }
+  .btn-succ  { background: var(--green);  color: #fff; }
+  .btn-sec   { background: var(--bg3); color: var(--sub); border: 1px solid var(--border); }
+  .btn-ghost { background: transparent; color: var(--accent); border: 1px solid #4f5bd555; }
+  .btn-del   { background: transparent; color: var(--red);    border: 1px solid #e03c3c55; }
+  .btn-sm    { padding: 5px 12px; font-size: 10px; }
+  .btn-full  { width: 100%; justify-content: center; padding: 13px; }
+
+  /* ── form ── */
+  label.lbl { display: block; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+  input, select { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px 13px; font-size: 13px; font-family: inherit; outline: none; margin-bottom: 13px; box-shadow: inset 0 1px 3px #0000000a; }
+  input:focus, select:focus { border-color: var(--accent); }
+  .field { margin-bottom: 4px; }
+
+  /* ── alert ── */
+  .alert { padding: 11px 15px; border-radius: 8px; font-size: 12px; margin-bottom: 12px; display: none; }
+  .alert.show { display: block; }
+  .alert-err  { background: #ff6b6b11; border: 1px solid #ff6b6b44; color: var(--red); }
+  .alert-ok   { background: #2ecc7111; border: 1px solid #2ecc7144; color: var(--green); }
+  .alert-info { background: #7c85ff11; border: 1px solid #7c85ff44; color: var(--accent); }
+
+  /* ── tag ── */
+  .tag { display: inline-block; padding: 2px 9px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+  .tag-purple { background: #7c85ff22; color: var(--accent); border: 1px solid #7c85ff33; }
+  .tag-green  { background: #2ecc7122; color: var(--green);  border: 1px solid #2ecc7133; }
+  .tag-yellow { background: #f39c1222; color: var(--yellow); border: 1px solid #f39c1233; }
+  .tag-red    { background: #ff6b6b22; color: var(--red);    border: 1px solid #ff6b6b33; }
+
+  /* ── mode select ── */
+  .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
+  .mode-btn  { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 28px 16px; text-align: center; cursor: pointer; font-family: inherit; color: var(--muted); transition: all .2s; box-shadow: 0 1px 4px #0000000a; }
+  .mode-btn:hover { border-color: var(--accent); color: var(--accent); background: #f0f2ff; }
+  .mode-btn .icon { font-size: 30px; margin-bottom: 10px; }
+  .mode-btn .label { font-size: 13px; font-weight: 700; letter-spacing: 2px; }
+  .mode-btn .sub   { font-size: 10px; margin-top: 5px; letter-spacing: 1px; }
+
+  /* ── course list ── */
+  .course-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 12px; box-shadow: 0 1px 4px #0000000a; }
+  .course-name { font-size: 15px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+  .course-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .course-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* ── session ── */
+  .session-tabs { display: flex; flex-wrap: wrap; gap: 7px; }
+  .session-tab  { padding: 7px 14px; border-radius: 7px; border: none; cursor: pointer; font-size: 11px; font-weight: 700; font-family: inherit; }
+  .session-tab.active   { background: var(--accent); color: #fff; }
+  .session-tab.inactive { background: var(--bg3); color: var(--sub); border: 1px solid var(--border); }
+
+  /* ── code display ── */
+  .code-box  { background: #f0f2ff; border: 1px solid #c0c8ff; border-radius: 12px; padding: 22px; text-align: center; }
+  .code-big  { font-size: 54px; font-weight: 700; letter-spacing: 12px; color: var(--accent); line-height: 1; }
+  .code-sub  { font-size: 11px; color: var(--muted); margin-top: 10px; letter-spacing: 1px; }
+  .timer-bar { height: 3px; border-radius: 2px; margin-top: 10px; background: #dde1ee; }
+  .timer-fill{ height: 100%; border-radius: 2px; background: var(--accent); transition: width 1s linear; }
+
+  /* ── table ── */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th    { text-align: left; padding: 9px 11px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+  td    { padding: 9px 11px; border-bottom: 1px solid #1e2133; color: var(--sub); }
+
+  /* ── pin ── */
+  .pin-input { letter-spacing: 8px; font-size: 22px; text-align: center; }
+
+  /* ── hidden ── */
+  .page { display: none; }
+  .page.active { display: block; }
+  .flex-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Lecture Attendance</h1>
+    <p>リアルタイム出席管理システム</p>
+  </div>
+  <button class="btn btn-ghost btn-sm" id="back-btn" onclick="goBack()" style="display:none">← 戻る</button>
+</header>
+
+<div class="wrap">
+
+  <!-- ① ホーム -->
+  <div class="page active" id="page-home">
+    <p style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px">モードを選択してください</p>
+    <div class="mode-grid">
+      <button class="mode-btn" onclick="showPage('student')">
+        <div class="icon">🎓</div>
+        <div class="label">出席登録</div>
+        <div class="sub">STUDENT</div>
+      </button>
+      <button class="mode-btn" onclick="showPage('pin')">
+        <div class="icon">📋</div>
+        <div class="label">教員管理</div>
+        <div class="sub">INSTRUCTOR</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- ② PIN -->
+  <div class="page" id="page-pin" style="max-width:340px;margin:0 auto">
+    <div class="card">
+      <p class="sec">教員認証</p>
+      <div class="alert alert-err" id="pin-err"></div>
+      <div class="field"><label class="lbl">PINコード</label>
+        <input type="password" class="pin-input" id="pin-input" maxlength="4" placeholder="• • • •"
+          oninput="pinErr()" onkeydown="if(event.key==='Enter')checkPin()">
+      </div>
+      <button class="btn btn-pri btn-full" onclick="checkPin()">認証</button>
+    </div>
+  </div>
+
+  <!-- ③ 科目一覧（教員） -->
+  <div class="page" id="page-list">
+    <div class="flex-row" style="margin-bottom:18px">
+      <p class="sec" style="margin:0">科目一覧</p>
+      <button class="btn btn-pri" style="margin-left:auto" onclick="showPage('edit',null)">＋ 科目追加</button>
+    </div>
+    <div id="course-list-body"></div>
+  </div>
+
+  <!-- ④ 科目編集 -->
+  <div class="page" id="page-edit" style="max-width:500px;margin:0 auto">
+    <div class="card">
+      <p class="sec" id="edit-title">科目追加</p>
+      <div class="alert alert-err" id="edit-err"></div>
+      <input type="hidden" id="edit-id">
+      <div class="field"><label class="lbl">科目名</label><input id="edit-name" placeholder="例：社会福祉概論"></div>
+      <div class="field"><label class="lbl">教室</label><input id="edit-room" placeholder="例：A301"></div>
+      <div class="field"><label class="lbl">担当者</label><input id="edit-instructor" placeholder="例：河村 太郎"></div>
+      <div class="field"><label class="lbl">講義回数</label><input id="edit-sessions" type="number" min="1" max="30" value="15"></div>
+      <div class="flex-row" style="margin-top:6px">
+        <button class="btn btn-pri" onclick="saveCourse()">保存</button>
+        <button class="btn btn-sec" onclick="showPage('list')">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ セッション管理 -->
+  <div class="page" id="page-session">
+    <div style="margin-bottom:18px">
+      <div id="session-course-name" style="font-size:16px;font-weight:700"></div>
+      <div id="session-course-meta" style="font-size:11px;color:var(--muted);margin-top:3px"></div>
+    </div>
+
+    <!-- 回選択 -->
+    <div class="card">
+      <p class="sec">回の選択</p>
+      <div class="session-tabs" id="session-tabs"></div>
+    </div>
+
+    <!-- コード -->
+    <div class="card">
+      <div class="flex-row" style="margin-bottom:14px">
+        <p class="sec" style="margin:0" id="session-round-label">第1回　受付コード</p>
+        <button class="btn btn-succ btn-sm" id="start-btn" onclick="startSession()" style="margin-left:auto">受付開始</button>
+        <button class="btn btn-del  btn-sm" id="stop-btn"  onclick="stopSession()"  style="display:none">受付終了</button>
+      </div>
+      <div class="code-box" id="code-box-inactive">
+        <div style="color:var(--muted);font-size:13px;letter-spacing:1px">受付停止中</div>
+      </div>
+      <div class="code-box" id="code-box-active" style="display:none">
+        <div class="code-big" id="code-display">----</div>
+        <div class="code-sub" id="timer-text">次の更新まで 60 秒</div>
+        <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%"></div></div>
+      </div>
+    </div>
+
+    <!-- 出席者一覧 -->
+    <div class="card">
+      <div class="flex-row" style="margin-bottom:14px">
+        <p class="sec" style="margin:0">出席者一覧　<span id="att-count" style="color:var(--accent)">0名</span></p>
+        <button class="btn btn-ghost btn-sm" id="csv-btn" onclick="exportCSV()" style="margin-left:auto;display:none">CSV出力</button>
+      </div>
+      <div id="att-body"></div>
+    </div>
+  </div>
+
+  <!-- ⑥ 学生（出席登録） -->
+  <div class="page" id="page-student" style="max-width:480px;margin:0 auto">
+    <div class="card">
+      <p class="sec">出席登録</p>
+      <div class="alert alert-err" id="stu-err"></div>
+      <div class="alert alert-ok"  id="stu-ok"></div>
+      <div class="field"><label class="lbl">科目選択</label>
+        <select id="stu-course" onchange="onCourseSelect()">
+          <option value="">-- 科目を選択 --</option>
+        </select>
+      </div>
+      <div class="alert alert-info show" id="stu-status" style="margin-bottom:12px"></div>
+      <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001"></div>
+      <div class="field"><label class="lbl">氏名</label><input id="stu-name" placeholder="例：山田 花子"></div>
+      <div class="field"><label class="lbl">出席コード（4桁）</label>
+        <input id="stu-code" maxlength="4" placeholder="0000" class="pin-input"
+          onkeydown="if(event.key==='Enter')submitAttendance()">
+      </div>
+      <button class="btn btn-pri btn-full" onclick="submitAttendance()">出席登録</button>
+    </div>
+    <div class="card" id="active-courses-card" style="display:none">
+      <p class="sec">現在受付中の科目</p>
+      <div id="active-courses-body"></div>
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+
+<script>
+// ── Firebase 初期化 ──────────────────────────────────────────────
+firebase.initializeApp({
+  apiKey:            "AIzaSyA8yv2AL8ppFebDYRDcwcXmcaLORvW1tmU",
+  databaseURL:       "https://lecture-attendance-90b9c-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "lecture-attendance-90b9c",
+  messagingSenderId: "1074810980063",
+  appId:             "1:1074810980063:web:c8c0280133354ccb618b6a",
+});
+const db = firebase.database();
+
+// ── 状態 ─────────────────────────────────────────────────────────
+let courses      = {};
+let activeSes    = {};
+let currentPage  = "home";
+let prevPage     = "home";
+let sessionCourseId = null;
+let sessionSelIdx   = 0;
+let timerInterval   = null;
+let attUnsubscribe  = null;
+
+// ── Firebase 購読 ─────────────────────────────────────────────────
+db.ref("courses").on("value", snap => {
+  courses = snap.val() || {};
+  if (currentPage === "list")    renderCourseList();
+  if (currentPage === "student") renderStudentCourses();
+  if (currentPage === "session") renderSessionCourse();
+});
+db.ref("activeSessions").on("value", snap => {
+  activeSes = snap.val() || {};
+  if (currentPage === "session") renderSessionCode();
+  if (currentPage === "student") renderStudentStatus();
+  if (currentPage === "list")    renderCourseList();
+});
+
+// ── ページ遷移 ────────────────────────────────────────────────────
+function showPage(name, extra) {
+  prevPage = currentPage;
+  currentPage = name;
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.getElementById("page-" + name).classList.add("active");
+  document.getElementById("back-btn").style.display = name === "home" ? "none" : "";
+
+  if (name === "list")    renderCourseList();
+  if (name === "edit")    openEdit(extra);
+  if (name === "session") openSession(extra);
+  if (name === "student") { renderStudentCourses(); renderStudentStatus(); }
+  if (name === "pin")     { document.getElementById("pin-input").value=""; document.getElementById("pin-err").classList.remove("show"); setTimeout(()=>document.getElementById("pin-input").focus(),100); }
+}
+
+function goBack() {
+  const dest = (currentPage === "student" || currentPage === "pin") ? "home"
+             : (currentPage === "edit" || currentPage === "session")  ? "list"
+             : "home";
+  stopTimerLoop();
+  if (attUnsubscribe) { attUnsubscribe(); attUnsubscribe = null; }
+  showPage(dest);
+}
+
+// ── PIN ───────────────────────────────────────────────────────────
+function checkPin() {
+  if (document.getElementById("pin-input").value === "1234") {
+    showPage("list");
+  } else {
+    const el = document.getElementById("pin-err");
+    el.textContent = "PINが正しくありません";
+    el.classList.add("show");
+    document.getElementById("pin-input").value = "";
+  }
+}
+function pinErr() { document.getElementById("pin-err").classList.remove("show"); }
+
+// ── 科目一覧 ──────────────────────────────────────────────────────
+function renderCourseList() {
+  const el = document.getElementById("course-list-body");
+  const entries = Object.entries(courses);
+  if (entries.length === 0) {
+    el.innerHTML = `<div class="alert alert-info show">科目が登録されていません。「科目追加」から登録してください。</div>`;
+    return;
+  }
+  el.innerHTML = entries.map(([id, c]) => {
+    const active = activeSes[id];
+    return `<div class="course-card">
+      <div class="course-name">${esc(c.name)}</div>
+      <div class="course-meta">
+        <span class="tag tag-purple">🏫 ${esc(c.room)}</span>
+        <span class="tag tag-green">👤 ${esc(c.instructor)}</span>
+        <span class="tag tag-yellow">📅 全${c.sessions}回</span>
+        ${active ? '<span class="tag tag-red">● 受付中</span>' : ""}
+      </div>
+      <div class="course-actions">
+        <button class="btn btn-pri btn-sm" onclick="showPage('session','${id}')">セッション管理</button>
+        <button class="btn btn-ghost btn-sm" onclick="showPage('edit','${id}')">編集</button>
+        <button class="btn btn-del btn-sm" onclick="deleteCourse('${id}','${esc(c.name)}')">削除</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// ── 科目編集 ──────────────────────────────────────────────────────
+function openEdit(idOrNull) {
+  const id = idOrNull && typeof idOrNull === "string" ? idOrNull : null;
+  const c  = id ? courses[id] : null;
+  document.getElementById("edit-title").textContent      = c ? "科目編集" : "科目追加";
+  document.getElementById("edit-id").value               = id || "";
+  document.getElementById("edit-name").value             = c?.name       || "";
+  document.getElementById("edit-room").value             = c?.room       || "";
+  document.getElementById("edit-instructor").value       = c?.instructor || "";
+  document.getElementById("edit-sessions").value         = c?.sessions   || 15;
+  document.getElementById("edit-err").classList.remove("show");
+}
+
+async function saveCourse() {
+  const name       = document.getElementById("edit-name").value.trim();
+  const room       = document.getElementById("edit-room").value.trim();
+  const instructor = document.getElementById("edit-instructor").value.trim();
+  const sessions   = parseInt(document.getElementById("edit-sessions").value);
+  const id         = document.getElementById("edit-id").value;
+  if (!name || !room || !instructor || !sessions) {
+    showEditErr("すべての項目を入力してください"); return;
+  }
+  const data = { name, room, instructor, sessions };
+  try {
+    if (id) await db.ref(`courses/${id}`).update(data);
+    else    await db.ref("courses").push(data);
+    showPage("list");
+  } catch(e) { showEditErr("保存に失敗しました: " + e.message); }
+}
+function showEditErr(msg) {
+  const el = document.getElementById("edit-err");
+  el.textContent = msg; el.classList.add("show");
+}
+
+async function deleteCourse(id, name) {
+  if (!confirm(`「${name}」を削除しますか？`)) return;
+  await db.ref(`courses/${id}`).remove();
+  await db.ref(`activeSessions/${id}`).remove();
+  await db.ref(`attendance/${id}`).remove();
+}
+
+// ── セッション管理 ────────────────────────────────────────────────
+function openSession(id) {
+  sessionCourseId = id;
+  sessionSelIdx   = 0;
+  renderSessionCourse();
+  renderSessionTabs();
+  renderSessionCode();
+
+  // 出席データ購読
+  if (attUnsubscribe) attUnsubscribe();
+  const ref = db.ref(`attendance/${id}`);
+  const handler = snap => {
+    renderAttendance(snap.val() || {});
+  };
+  ref.on("value", handler);
+  attUnsubscribe = () => ref.off("value", handler);
+}
+
+function renderSessionCourse() {
+  const c = courses[sessionCourseId];
+  if (!c) return;
+  document.getElementById("session-course-name").textContent = c.name;
+  document.getElementById("session-course-meta").textContent = `${c.room} ／ ${c.instructor}`;
+  renderSessionTabs();
+}
+
+function renderSessionTabs() {
+  const c = courses[sessionCourseId];
+  if (!c) return;
+  document.getElementById("session-tabs").innerHTML =
+    Array.from({length: c.sessions}, (_, i) =>
+      `<button class="session-tab ${i===sessionSelIdx?'active':'inactive'}"
+        onclick="selectSessionIdx(${i})">${i+1}</button>`
+    ).join("");
+  document.getElementById("session-round-label").textContent = `第${sessionSelIdx+1}回　受付コード`;
+}
+
+function selectSessionIdx(i) {
+  sessionSelIdx = i;
+  renderSessionTabs();
+  renderSessionCode();
+}
+
+function renderSessionCode() {
+  const ses    = activeSes[sessionCourseId];
+  const active = ses && ses.sessionIdx === sessionSelIdx;
+
+  document.getElementById("start-btn").style.display = active ? "none" : "";
+  document.getElementById("stop-btn").style.display  = active ? ""     : "none";
+  document.getElementById("code-box-inactive").style.display = active ? "none" : "";
+  document.getElementById("code-box-active").style.display   = active ? ""     : "none";
+
+  stopTimerLoop();
+  if (active) {
+    document.getElementById("code-display").textContent = ses.code;
+    startTimerLoop(ses);
+  }
+}
+
+function startTimerLoop(ses) {
+  const tick = () => {
+    const elapsed   = Math.floor((Date.now() - ses.codeIssuedAt) / 1000);
+    const remaining = 60 - (elapsed % 60);
+    document.getElementById("timer-text").textContent = `次の更新まで ${remaining} 秒`;
+    document.getElementById("timer-fill").style.width  = (remaining / 60 * 100) + "%";
+
+    if (elapsed > 0 && elapsed % 60 === 0) {
+      const newCode = genCode();
+      db.ref(`activeSessions/${sessionCourseId}/code`).set(newCode);
+      db.ref(`activeSessions/${sessionCourseId}/codeIssuedAt`).set(Date.now());
+      document.getElementById("code-display").textContent = newCode;
+      ses = { ...ses, code: newCode, codeIssuedAt: Date.now() };
+    }
+  };
+  tick();
+  timerInterval = setInterval(tick, 1000);
+}
+function stopTimerLoop() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
+
+async function startSession() {
+  await db.ref(`activeSessions/${sessionCourseId}`).set({
+    sessionIdx:   sessionSelIdx,
+    code:         genCode(),
+    codeIssuedAt: Date.now(),
+  });
+}
+async function stopSession() {
+  stopTimerLoop();
+  await db.ref(`activeSessions/${sessionCourseId}`).remove();
+}
+
+// 出席者一覧
+function renderAttendance(allData) {
+  const records = allData[sessionSelIdx] ? Object.entries(allData[sessionSelIdx]) : [];
+  document.getElementById("att-count").textContent = records.length + "名";
+  document.getElementById("csv-btn").style.display = records.length ? "" : "none";
+
+  if (records.length === 0) {
+    document.getElementById("att-body").innerHTML =
+      `<div style="color:var(--muted);text-align:center;padding:18px 0;font-size:12px">出席者がいません</div>`;
+    return;
+  }
+  document.getElementById("att-body").innerHTML = `
+    <table>
+      <thead><tr><th>学籍番号</th><th>氏名</th><th>登録時刻</th><th></th></tr></thead>
+      <tbody>${records.map(([rid, r]) => `<tr>
+        <td>${esc(r.studentNo)}</td>
+        <td>${esc(r.name)}</td>
+        <td>${fmtTime(r.time)}</td>
+        <td><button class="btn btn-del btn-sm" onclick="deleteRecord('${rid}')">削除</button></td>
+      </tr>`).join("")}</tbody>
+    </table>`;
+
+  // CSV用にキャッシュ
+  window._lastRecords = records.map(([,r]) => r);
+}
+
+async function deleteRecord(rid) {
+  await db.ref(`attendance/${sessionCourseId}/${sessionSelIdx}/${rid}`).remove();
+}
+
+function exportCSV() {
+  const rows = window._lastRecords || [];
+  const csv  = "\uFEFF学籍番号,氏名,登録時刻\n" + rows.map(r => `${r.studentNo},${r.name},${fmtTime(r.time)}`).join("\n");
+  const a    = document.createElement("a");
+  a.href     = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
+  a.download = `出席_第${sessionSelIdx+1}回.csv`;
+  a.click();
+}
+
+// ── 学生画面 ──────────────────────────────────────────────────────
+function renderStudentCourses() {
+  const sel = document.getElementById("stu-course");
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">-- 科目を選択 --</option>` +
+    Object.entries(courses).map(([id, c]) =>
+      `<option value="${id}">${esc(c.name)}${activeSes[id] ? "　●受付中" : ""}</option>`
+    ).join("");
+  sel.value = cur;
+}
+
+function renderStudentStatus() {
+  const id  = document.getElementById("stu-course").value;
+  const el  = document.getElementById("stu-status");
+  const ses = id ? activeSes[id] : null;
+  if (!id)  { el.className="alert alert-info"; el.style.display="none"; el.textContent=""; return; }
+  el.style.display = "block";
+  if (ses)  { el.className="alert alert-info show"; el.textContent=`第${ses.sessionIdx+1}回　受付中`; }
+  else      { el.className="alert alert-err show";  el.textContent="この科目は現在受付中ではありません"; }
+
+  // 受付中科目一覧
+  const active = Object.entries(courses).filter(([cid]) => activeSes[cid]);
+  const card   = document.getElementById("active-courses-card");
+  card.style.display = active.length ? "" : "none";
+  document.getElementById("active-courses-body").innerHTML = active.map(([cid, c]) =>
+    `<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+      <span class="tag tag-red">● 受付中</span>
+      <span style="font-size:13px">${esc(c.name)}</span>
+      <span style="font-size:11px;color:var(--muted)">第${activeSes[cid].sessionIdx+1}回</span>
+    </div>`).join("");
+}
+
+function onCourseSelect() {
+  document.getElementById("stu-err").classList.remove("show");
+  document.getElementById("stu-ok").classList.remove("show");
+  renderStudentStatus();
+}
+
+async function submitAttendance() {
+  const courseId  = document.getElementById("stu-course").value;
+  const studentNo = document.getElementById("stu-no").value.trim();
+  const name      = document.getElementById("stu-name").value.trim();
+  const code      = document.getElementById("stu-code").value.trim();
+  const errEl     = document.getElementById("stu-err");
+  const okEl      = document.getElementById("stu-ok");
+  errEl.classList.remove("show"); okEl.classList.remove("show");
+
+  const showErr = msg => { errEl.textContent=msg; errEl.classList.add("show"); };
+
+  if (!courseId || !studentNo || !name || !code) { showErr("すべての項目を入力してください"); return; }
+  const ses = activeSes[courseId];
+  if (!ses)               { showErr("この科目は現在受付中ではありません"); return; }
+  if (ses.code !== code)  { showErr("出席コードが違います"); return; }
+
+  // 二重登録チェック
+  const snap = await db.ref(`attendance/${courseId}/${ses.sessionIdx}`).once("value");
+  const existing = snap.val();
+  if (existing && Object.values(existing).some(r => r.studentNo === studentNo)) {
+    showErr("すでに出席登録済みです"); return;
+  }
+
+  try {
+    await db.ref(`attendance/${courseId}/${ses.sessionIdx}`).push({
+      studentNo, name, time: new Date().toISOString()
+    });
+    okEl.textContent = `「${courses[courseId]?.name}」第${ses.sessionIdx+1}回の出席を登録しました`;
+    okEl.classList.add("show");
+    document.getElementById("stu-code").value = "";
+  } catch(e) { showErr("登録に失敗しました: " + e.message); }
+}
+
+// ── utils ────────────────────────────────────────────────────────
+function genCode() { return String(Math.floor(1000 + Math.random() * 9000)); }
+function fmtTime(iso) { try { return new Date(iso).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"}); } catch{return "";} }
+function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+</script>
+</body>
+</html>
