@@ -154,7 +154,11 @@
   <div class="page" id="page-list">
     <div class="flex-row" style="margin-bottom:18px">
       <p class="sec" style="margin:0">科目一覧</p>
-      <button class="btn btn-pri" style="margin-left:auto" onclick="showPage('edit',null)">＋ 科目追加</button>
+      <span id="teacher-badge" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-del btn-sm" id="force-stop-btn" onclick="forceStopAll()" style="display:none">⏹ 全受付強制終了</button>
+        <button class="btn btn-pri" onclick="showPage('edit',null)">＋ 科目追加</button>
+      </div>
     </div>
     <div id="course-list-body"></div>
   </div>
@@ -167,8 +171,17 @@
       <input type="hidden" id="edit-id">
       <div class="field"><label class="lbl">科目名</label><input id="edit-name" placeholder="例：社会福祉概論"></div>
       <div class="field"><label class="lbl">教室</label><input id="edit-room" placeholder="例：A301"></div>
-      <div class="field"><label class="lbl">担当者</label><input id="edit-instructor" placeholder="例：河村 太郎"></div>
-      <div class="field"><label class="lbl">講義回数</label><input id="edit-sessions" type="number" min="1" max="30" value="15"></div>
+      <div class="field"><label class="lbl">担当者（表示名）</label><input id="edit-instructor" placeholder="例：河村 太郎"></div>
+      <div class="field" id="teacher-check-field" style="display:none">
+        <label class="lbl">担当教員（複数選択可）</label>
+        <div id="teacher-checkboxes" style="display:flex;flex-wrap:wrap;gap:10px;padding:8px 0"></div>
+      </div>
+      <div class="field"><label class="lbl">講義回数</label><input id="edit-sessions" type="number" min="1" max="30" value="15" oninput="updateRequiredHint()"></div>
+      <div class="field">
+        <label class="lbl">出席認定ライン（回数）</label>
+        <input id="edit-required" type="number" min="1" max="30" placeholder="例：10（空欄で設定なし）">
+        <div id="required-hint" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+      </div>
       <div class="flex-row" style="margin-top:6px">
         <button class="btn btn-pri" onclick="saveCourse()">保存</button>
         <button class="btn btn-sec" onclick="showPage('list')">キャンセル</button>
@@ -193,8 +206,19 @@
     <div class="card">
       <div class="flex-row" style="margin-bottom:14px">
         <p class="sec" style="margin:0" id="session-round-label">第1回　受付コード</p>
-        <button class="btn btn-succ btn-sm" id="start-btn" onclick="startSession()" style="margin-left:auto">受付開始</button>
-        <button class="btn btn-del  btn-sm" id="stop-btn"  onclick="stopSession()"  style="display:none">受付終了</button>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div id="start-controls" style="display:flex;gap:8px;align-items:center">
+            <div style="display:flex;align-items:center;gap:6px">
+              <label style="font-size:11px;color:var(--muted);white-space:nowrap">終了時刻</label>
+              <input type="time" id="auto-stop-time" style="width:100px;margin:0;padding:6px 10px;font-size:12px">
+            </div>
+            <button class="btn btn-succ btn-sm" onclick="startSession()">受付開始</button>
+          </div>
+          <div id="stop-controls" style="display:none;align-items:center;gap:8px">
+            <span id="auto-stop-label" style="font-size:11px;color:var(--muted)"></span>
+            <button class="btn btn-del btn-sm" onclick="stopSession()">受付終了</button>
+          </div>
+        </div>
       </div>
       <div class="code-box" id="code-box-inactive">
         <div style="color:var(--muted);font-size:13px;letter-spacing:1px">受付停止中</div>
@@ -210,7 +234,10 @@
     <div class="card">
       <div class="flex-row" style="margin-bottom:14px">
         <p class="sec" style="margin:0">出席者一覧　<span id="att-count" style="color:var(--accent)">0名</span></p>
-        <button class="btn btn-ghost btn-sm" id="csv-btn" onclick="exportCSV()" style="margin-left:auto;display:none">CSV出力</button>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" id="rate-btn" onclick="exportRateCSV()" style="display:none">出席率CSV</button>
+          <button class="btn btn-ghost btn-sm" id="csv-btn"  onclick="exportCSV()"     style="display:none">回別CSV</button>
+        </div>
       </div>
       <div id="att-body"></div>
     </div>
@@ -228,8 +255,11 @@
         </select>
       </div>
       <div class="alert alert-info show" id="stu-status" style="margin-bottom:12px"></div>
-      <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001"></div>
-      <div class="field"><label class="lbl">氏名</label><input id="stu-name" placeholder="例：山田 花子"></div>
+      <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001" oninput="clearStuMsg()"></div>
+      <div class="field"><label class="lbl">氏名</label><input id="stu-name" placeholder="例：山田 花子" oninput="clearStuMsg()"></div>
+      <div style="text-align:right;margin-top:-8px;margin-bottom:8px">
+        <button type="button" onclick="clearStudentHistory()" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;text-decoration:underline">入力履歴をクリア</button>
+      </div>
       <div class="field"><label class="lbl">出席コード（4桁）</label>
         <input id="stu-code" maxlength="4" placeholder="0000" class="pin-input"
           onkeydown="if(event.key==='Enter')submitAttendance()">
@@ -258,6 +288,7 @@ const db = firebase.database();
 // ── 状態 ─────────────────────────────────────────────────────────
 let courses      = {};
 let activeSes    = {};
+let allAttendance = {}; // 全出席データ（科目一覧の件数表示用）
 let currentPage  = "home";
 let prevPage     = "home";
 let sessionCourseId = null;
@@ -278,6 +309,10 @@ db.ref("activeSessions").on("value", snap => {
   if (currentPage === "student") renderStudentStatus();
   if (currentPage === "list")    renderCourseList();
 });
+db.ref("attendance").on("value", snap => {
+  allAttendance = snap.val() || {};
+  if (currentPage === "list") renderCourseList();
+});
 
 // ── ページ遷移 ────────────────────────────────────────────────────
 function showPage(name, extra) {
@@ -290,7 +325,7 @@ function showPage(name, extra) {
   if (name === "list")    renderCourseList();
   if (name === "edit")    openEdit(extra);
   if (name === "session") openSession(extra);
-  if (name === "student") { renderStudentCourses(); renderStudentStatus(); }
+  if (name === "student") { renderStudentCourses(); renderStudentStatus(); loadStudentHistory(); }
   if (name === "pin")     { document.getElementById("pin-input").value=""; document.getElementById("pin-err").classList.remove("show"); setTimeout(()=>document.getElementById("pin-input").focus(),100); }
 }
 
@@ -300,12 +335,28 @@ function goBack() {
              : "home";
   stopTimerLoop();
   if (attUnsubscribe) { attUnsubscribe(); attUnsubscribe = null; }
+  if (dest === "home") currentTeacher = null;
   showPage(dest);
 }
 
 // ── PIN ───────────────────────────────────────────────────────────
+// ── 教員マスタ ───────────────────────────────────────────────────
+const TEACHERS = {
+  "7373": { id: "kawamura",  name: "河村" },
+  "3986": { id: "otani",     name: "大谷" },
+  "2940": { id: "hashimoto", name: "橋本拓" },
+  "7986": { id: "nabeta",    name: "鍋田" },
+};
+const ADMIN_PIN = "1234";
+let currentTeacher = null; // { id, name } or { id:"admin", name:"管理者" }
+
 function checkPin() {
-  if (document.getElementById("pin-input").value === "1234") {
+  const pin = document.getElementById("pin-input").value;
+  if (pin === ADMIN_PIN) {
+    currentTeacher = { id: "admin", name: "管理者" };
+    showPage("list");
+  } else if (TEACHERS[pin]) {
+    currentTeacher = TEACHERS[pin];
     showPage("list");
   } else {
     const el = document.getElementById("pin-err");
@@ -319,22 +370,56 @@ function pinErr() { document.getElementById("pin-err").classList.remove("show");
 // ── 科目一覧 ──────────────────────────────────────────────────────
 function renderCourseList() {
   const el = document.getElementById("course-list-body");
-  const entries = Object.entries(courses);
+  // ログイン中の教員名バッジ
+  const badge = document.getElementById("teacher-badge");
+  if (badge && currentTeacher) badge.textContent = `ログイン中：${currentTeacher.name}`;
+
+  // 管理者のみ強制終了ボタンを表示、受付中があるときだけ有効化
+  const forceBtn = document.getElementById("force-stop-btn");
+  if (forceBtn) {
+    forceBtn.style.display = currentTeacher?.id === "admin" ? "" : "none";
+    const hasActive = Object.keys(activeSes).length > 0;
+    forceBtn.style.opacity = hasActive ? "1" : "0.4";
+    forceBtn.style.pointerEvents = hasActive ? "" : "none";
+  }
+
+  // 管理者は全科目、教員は自分の科目だけ
+  const entries = Object.entries(courses).filter(([id, c]) => {
+    if (currentTeacher?.id === "admin") return true;
+    const ids = c.teacherIds || (c.teacherId ? [c.teacherId] : []);
+    return ids.includes(currentTeacher?.id);
+  });
   if (entries.length === 0) {
     el.innerHTML = `<div class="alert alert-info show">科目が登録されていません。「科目追加」から登録してください。</div>`;
     return;
   }
   el.innerHTML = entries.map(([id, c]) => {
-    const active = activeSes[id];
+    const active    = activeSes[id];
+    const attData   = allAttendance[id] || {};
+    // 回ごとの出席者数を集計
+    const sessionCounts = Array.from({length: c.sessions}, (_, i) => {
+      const n = attData[i] ? Object.keys(attData[i]).length : 0;
+      return n > 0 ? `第${i+1}回:${n}名` : null;
+    }).filter(Boolean);
+    const totalAtt  = Object.values(attData).reduce((sum, s) => sum + Object.keys(s).length, 0);
+    const attSummary = sessionCounts.length > 0
+      ? `<div style="margin-top:10px;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">出席者数　合計 ${totalAtt}件</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">${sessionCounts.map(s=>`<span style="font-size:11px;color:var(--sub)">${s}</span>`).join('<span style="color:var(--border)">／</span>')}</div>
+        </div>`
+      : `<div style="margin-top:10px;font-size:11px;color:var(--muted)">出席データなし</div>`;
     return `<div class="course-card">
       <div class="course-name">${esc(c.name)}</div>
       <div class="course-meta">
         <span class="tag tag-purple">🏫 ${esc(c.room)}</span>
         <span class="tag tag-green">👤 ${esc(c.instructor)}</span>
         <span class="tag tag-yellow">📅 全${c.sessions}回</span>
-        ${active ? '<span class="tag tag-red">● 受付中</span>' : ""}
+        ${c.requiredSessions ? `<span class="tag" style="background:#4f5bd522;color:var(--accent);border:1px solid #4f5bd533">✅ ${c.requiredSessions}回以上で認定</span>` : ""}
+        ${active ? `<span class="tag tag-red">● 受付中（第${activeSes[id].sessionIdx+1}回）</span>` : ""}
+        ${currentTeacher?.id === "admin" ? `<span class="tag" style="background:#88888822;color:#888;border:1px solid #88888833">🔑 ${(c.teacherIds||[c.teacherId||""]).map(tid=>getTeacherName(tid)).join("・")}</span>` : ""}
       </div>
-      <div class="course-actions">
+      ${attSummary}
+      <div class="course-actions" style="margin-top:12px">
         <button class="btn btn-pri btn-sm" onclick="showPage('session','${id}')">セッション管理</button>
         <button class="btn btn-ghost btn-sm" onclick="showPage('edit','${id}')">編集</button>
         <button class="btn btn-del btn-sm" onclick="deleteCourse('${id}','${esc(c.name)}')">削除</button>
@@ -354,6 +439,24 @@ function openEdit(idOrNull) {
   document.getElementById("edit-instructor").value       = c?.instructor || "";
   document.getElementById("edit-sessions").value         = c?.sessions   || 15;
   document.getElementById("edit-err").classList.remove("show");
+  document.getElementById("edit-required").value = c?.requiredSessions ?? "";
+  updateRequiredHint();
+
+  // 管理者のみ担当教員選択を表示
+  const checkField = document.getElementById("teacher-check-field");
+  const checkboxes = document.getElementById("teacher-checkboxes");
+  if (currentTeacher?.id === "admin") {
+    checkField.style.display = "";
+    const teacherIds = c?.teacherIds || (c?.teacherId ? [c.teacherId] : []);
+    checkboxes.innerHTML = Object.entries(TEACHERS).map(([pin, t]) => `
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer">
+        <input type="checkbox" value="${t.id}" ${teacherIds.includes(t.id) ? "checked" : ""}
+          style="width:16px;height:16px;margin:0;accent-color:var(--accent)">
+        ${t.name}
+      </label>`).join("");
+  } else {
+    checkField.style.display = "none";
+  }
 }
 
 async function saveCourse() {
@@ -365,7 +468,21 @@ async function saveCourse() {
   if (!name || !room || !instructor || !sessions) {
     showEditErr("すべての項目を入力してください"); return;
   }
-  const data = { name, room, instructor, sessions };
+  // 担当教員IDリストを決定
+  let teacherIds;
+  if (currentTeacher?.id === "admin") {
+    // 管理者：チェックボックスから取得
+    const checked = Array.from(document.querySelectorAll("#teacher-checkboxes input:checked")).map(el => el.value);
+    teacherIds = checked.length > 0 ? checked : (id && courses[id]?.teacherIds) || [];
+  } else {
+    // 一般教員：自分のIDを維持（既存があれば引き継ぐ）
+    teacherIds = id && courses[id]?.teacherIds ? courses[id].teacherIds : [currentTeacher?.id || ""];
+  }
+  const reqVal = document.getElementById("edit-required").value;
+  const requiredSessions = reqVal ? Number(reqVal) : null;
+  const data = { name, room, instructor, sessions, teacherIds };
+  if (requiredSessions) data.requiredSessions = requiredSessions;
+  else data.requiredSessions = null;
   try {
     if (id) await db.ref(`courses/${id}`).update(data);
     else    await db.ref("courses").push(data);
@@ -388,6 +505,9 @@ async function deleteCourse(id, name) {
 function openSession(id) {
   sessionCourseId = id;
   sessionSelIdx   = 0;
+  // 終了時刻は空欄にリセット
+  const timeInput = document.getElementById("auto-stop-time");
+  if (timeInput) timeInput.value = "";
   renderSessionCourse();
   renderSessionTabs();
   renderSessionCode();
@@ -425,16 +545,25 @@ function selectSessionIdx(i) {
   sessionSelIdx = i;
   renderSessionTabs();
   renderSessionCode();
+  // 回を切り替えたら出席一覧も更新
+  if (window._lastAllData) renderAttendance(window._lastAllData);
 }
 
 function renderSessionCode() {
   const ses    = activeSes[sessionCourseId];
   const active = ses && ses.sessionIdx === sessionSelIdx;
 
-  document.getElementById("start-btn").style.display = active ? "none" : "";
-  document.getElementById("stop-btn").style.display  = active ? ""     : "none";
+  document.getElementById("start-controls").style.display = active ? "none" : "flex";
+  document.getElementById("stop-controls").style.display  = active ? "flex" : "none";
   document.getElementById("code-box-inactive").style.display = active ? "none" : "";
   document.getElementById("code-box-active").style.display   = active ? ""     : "none";
+
+  // 自動終了時刻ラベル
+  if (active && ses.autoStopTime) {
+    document.getElementById("auto-stop-label").textContent = `自動終了 ${ses.autoStopTime}`;
+  } else {
+    document.getElementById("auto-stop-label").textContent = "";
+  }
 
   stopTimerLoop();
   if (active) {
@@ -444,11 +573,19 @@ function renderSessionCode() {
 }
 
 function startTimerLoop(ses) {
-  const tick = () => {
-    const elapsed   = Math.floor((Date.now() - ses.codeIssuedAt) / 1000);
+  const tick = async () => {
+    const now     = Date.now();
+    const elapsed = Math.floor((now - ses.codeIssuedAt) / 1000);
     const remaining = 60 - (elapsed % 60);
     document.getElementById("timer-text").textContent = `次の更新まで ${remaining} 秒`;
     document.getElementById("timer-fill").style.width  = (remaining / 60 * 100) + "%";
+
+    // 自動終了チェック
+    if (ses.autoStopAt && now >= ses.autoStopAt) {
+      stopTimerLoop();
+      await db.ref(`activeSessions/${sessionCourseId}`).remove();
+      return;
+    }
 
     if (elapsed > 0 && elapsed % 60 === 0) {
       const newCode = genCode();
@@ -464,11 +601,23 @@ function startTimerLoop(ses) {
 function stopTimerLoop() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
 
 async function startSession() {
-  await db.ref(`activeSessions/${sessionCourseId}`).set({
+  const timeVal = document.getElementById("auto-stop-time").value;
+  const data = {
     sessionIdx:   sessionSelIdx,
     code:         genCode(),
     codeIssuedAt: Date.now(),
-  });
+  };
+  if (timeVal) {
+    data.autoStopTime = timeVal; // "HH:MM" 形式
+    // 今日の終了時刻をUNIXタイムスタンプに変換
+    const [h, m] = timeVal.split(":").map(Number);
+    const stopAt = new Date();
+    stopAt.setHours(h, m, 0, 0);
+    // もし指定時刻が過去なら翌日として扱う
+    if (stopAt.getTime() <= Date.now()) stopAt.setDate(stopAt.getDate() + 1);
+    data.autoStopAt = stopAt.getTime();
+  }
+  await db.ref(`activeSessions/${sessionCourseId}`).set(data);
 }
 async function stopSession() {
   stopTimerLoop();
@@ -477,27 +626,63 @@ async function stopSession() {
 
 // 出席者一覧
 function renderAttendance(allData) {
+  window._lastAllData = allData;
   const records = allData[sessionSelIdx] ? Object.entries(allData[sessionSelIdx]) : [];
   document.getElementById("att-count").textContent = records.length + "名";
-  document.getElementById("csv-btn").style.display = records.length ? "" : "none";
+  document.getElementById("csv-btn").style.display  = records.length ? "" : "none";
+
+  // 出席率CSV：全回にデータがあれば表示
+  const totalAtt = Object.keys(allData).length;
+  document.getElementById("rate-btn").style.display = totalAtt ? "" : "none";
+
+  // 認定ライン警告バナーを更新
+  const course   = courses[sessionCourseId];
+  const required = course?.requiredSessions;
+  let warningEl  = document.getElementById("cert-warning");
+  if (!warningEl) {
+    warningEl = document.createElement("div");
+    warningEl.id = "cert-warning";
+    document.getElementById("att-body").before(warningEl);
+  }
+  if (required) {
+    // 全回のデータから認定未達の学生を検出
+    const studentMap = {};
+    Object.entries(allData).forEach(([idx, sd]) => {
+      Object.values(sd).forEach(r => {
+        if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { name: r.name, count: 0 };
+        studentMap[r.studentNo].count++;
+      });
+    });
+    const atRisk = Object.entries(studentMap).filter(([, s]) => s.count < required);
+    warningEl.innerHTML = atRisk.length
+      ? `<div style="padding:10px 14px;background:#ff6b6b11;border:1px solid #ff6b6b33;border-radius:8px;margin-bottom:12px;font-size:12px;color:var(--red)">
+          ⚠️ 認定ライン（${required}回）未達：${atRisk.length}名
+          <span style="color:var(--muted);margin-left:8px">${atRisk.map(([,s])=>s.name).join("・")}</span>
+        </div>`
+      : `<div style="padding:10px 14px;background:#2ecc7111;border:1px solid #2ecc7133;border-radius:8px;margin-bottom:12px;font-size:12px;color:var(--green)">
+          ✅ 全員が認定ライン（${required}回）を達成しています
+        </div>`;
+  } else {
+    warningEl.innerHTML = "";
+  }
 
   if (records.length === 0) {
     document.getElementById("att-body").innerHTML =
       `<div style="color:var(--muted);text-align:center;padding:18px 0;font-size:12px">出席者がいません</div>`;
+    window._lastRecords = [];
     return;
   }
   document.getElementById("att-body").innerHTML = `
     <table>
-      <thead><tr><th>学籍番号</th><th>氏名</th><th>登録時刻</th><th></th></tr></thead>
+      <thead><tr><th>学籍番号</th><th>氏名</th><th>登録時刻</th><th>IPアドレス</th><th></th></tr></thead>
       <tbody>${records.map(([rid, r]) => `<tr>
         <td>${esc(r.studentNo)}</td>
         <td>${esc(r.name)}</td>
         <td>${fmtTime(r.time)}</td>
+        <td style="font-size:11px;color:var(--muted)">${esc(r.ip||"―")}</td>
         <td><button class="btn btn-del btn-sm" onclick="deleteRecord('${rid}')">削除</button></td>
       </tr>`).join("")}</tbody>
     </table>`;
-
-  // CSV用にキャッシュ
   window._lastRecords = records.map(([,r]) => r);
 }
 
@@ -507,10 +692,50 @@ async function deleteRecord(rid) {
 
 function exportCSV() {
   const rows = window._lastRecords || [];
-  const csv  = "\uFEFF学籍番号,氏名,登録時刻\n" + rows.map(r => `${r.studentNo},${r.name},${fmtTime(r.time)}`).join("\n");
+  const csv  = "\uFEFF学籍番号,氏名,登録時刻,IPアドレス\n" + rows.map(r => `${r.studentNo},${r.name},${fmtTime(r.time)},${r.ip||""}`).join("\n");
   const a    = document.createElement("a");
   a.href     = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
   a.download = `出席_第${sessionSelIdx+1}回.csv`;
+  a.click();
+}
+
+function exportRateCSV() {
+  const allData  = window._lastAllData || {};
+  const course   = courses[sessionCourseId];
+  if (!course) return;
+  const total    = course.sessions;
+
+  // 全学生を収集
+  const studentMap = {}; // { studentNo: { name, counts: Set } }
+  Object.entries(allData).forEach(([idx, sessionData]) => {
+    Object.values(sessionData).forEach(r => {
+      if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { name: r.name, attended: new Set() };
+      studentMap[r.studentNo].attended.add(Number(idx));
+    });
+  });
+
+  // ヘッダー行：学籍番号,氏名,出席回数,総回数,出席率,第1回,第2回,...
+  const required     = course.requiredSessions || null;
+  const roundHeaders = Array.from({length: total}, (_, i) => `第${i+1}回`).join(",");
+  const certCol      = required ? ",認定" : "";
+  const header       = `\uFEFF学籍番号,氏名,出席回数,総回数,出席率${certCol},${roundHeaders}`;
+
+  // データ行
+  const rows = Object.entries(studentMap)
+    .sort(([a],[b]) => a.localeCompare(b))
+    .map(([no, s]) => {
+      const count   = s.attended.size;
+      const rate    = Math.round(count / total * 100);
+      const cert    = required ? (count >= required ? "○" : "×") : "";
+      const certVal = required ? `,${cert}` : "";
+      const rounds  = Array.from({length: total}, (_, i) => s.attended.has(i) ? "○" : "―").join(",");
+      return `${no},${s.name},${count},${total},${rate}%${certVal},${rounds}`;
+    });
+
+  const csv = header + "\n" + rows.join("\n");
+  const a   = document.createElement("a");
+  a.href    = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
+  a.download = `出席率_${course.name}.csv`;
   a.click();
 }
 
@@ -518,11 +743,19 @@ function exportCSV() {
 function renderStudentCourses() {
   const sel = document.getElementById("stu-course");
   const cur = sel.value;
-  sel.innerHTML = `<option value="">-- 科目を選択 --</option>` +
-    Object.entries(courses).map(([id, c]) =>
-      `<option value="${id}">${esc(c.name)}${activeSes[id] ? "　●受付中" : ""}</option>`
-    ).join("");
-  sel.value = cur;
+  // 受付中の科目だけ表示
+  const activeEntries = Object.entries(courses).filter(([id]) => activeSes[id]);
+  if (activeEntries.length === 0) {
+    sel.innerHTML = `<option value="">-- 現在受付中の科目はありません --</option>`;
+  } else {
+    sel.innerHTML = `<option value="">-- 科目を選択 --</option>` +
+      activeEntries.map(([id, c]) =>
+        `<option value="${id}">${esc(c.name)}　第${activeSes[id].sessionIdx+1}回</option>`
+      ).join("");
+  }
+  // 以前選択していた科目が受付中なら維持、そうでなければリセット
+  sel.value = activeSes[cur] ? cur : "";
+  renderStudentStatus();
 }
 
 function renderStudentStatus() {
@@ -534,16 +767,8 @@ function renderStudentStatus() {
   if (ses)  { el.className="alert alert-info show"; el.textContent=`第${ses.sessionIdx+1}回　受付中`; }
   else      { el.className="alert alert-err show";  el.textContent="この科目は現在受付中ではありません"; }
 
-  // 受付中科目一覧
-  const active = Object.entries(courses).filter(([cid]) => activeSes[cid]);
-  const card   = document.getElementById("active-courses-card");
-  card.style.display = active.length ? "" : "none";
-  document.getElementById("active-courses-body").innerHTML = active.map(([cid, c]) =>
-    `<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
-      <span class="tag tag-red">● 受付中</span>
-      <span style="font-size:13px">${esc(c.name)}</span>
-      <span style="font-size:11px;color:var(--muted)">第${activeSes[cid].sessionIdx+1}回</span>
-    </div>`).join("");
+  // 受付中科目は選択肢に統合したのでカードは非表示
+  document.getElementById("active-courses-card").style.display = "none";
 }
 
 function onCourseSelect() {
@@ -568,25 +793,98 @@ async function submitAttendance() {
   if (!ses)               { showErr("この科目は現在受付中ではありません"); return; }
   if (ses.code !== code)  { showErr("出席コードが違います"); return; }
 
-  // 二重登録チェック
+  // Cookie による端末制限チェック
+  const cKey = cookieKey(courseId, ses.sessionIdx);
+  if (hasCookie(cKey)) {
+    showErr("この端末からはすでに出席登録済みです"); return;
+  }
+
+  // 二重登録チェック（学籍番号）
   const snap = await db.ref(`attendance/${courseId}/${ses.sessionIdx}`).once("value");
   const existing = snap.val();
   if (existing && Object.values(existing).some(r => r.studentNo === studentNo)) {
     showErr("すでに出席登録済みです"); return;
   }
 
+  // IPアドレス取得
+  let ip = "取得失敗";
+  try {
+    const ipRes = await fetch("https://api.ipify.org?format=json");
+    const ipJson = await ipRes.json();
+    ip = ipJson.ip;
+  } catch(e) { ip = "取得失敗"; }
+
   try {
     await db.ref(`attendance/${courseId}/${ses.sessionIdx}`).push({
-      studentNo, name, time: new Date().toISOString()
+      studentNo, name, time: new Date().toISOString(), ip
     });
+    setCookie(cookieKey(courseId, ses.sessionIdx));
+    saveStudentHistory(studentNo, name);
     okEl.textContent = `「${courses[courseId]?.name}」第${ses.sessionIdx+1}回の出席を登録しました`;
     okEl.classList.add("show");
     document.getElementById("stu-code").value = "";
   } catch(e) { showErr("登録に失敗しました: " + e.message); }
 }
 
+// ── 学生入力履歴（LocalStorage） ────────────────────────────────
+function saveStudentHistory(studentNo, name) {
+  try { localStorage.setItem("stu_no", studentNo); localStorage.setItem("stu_name", name); } catch(e) {}
+}
+function loadStudentHistory() {
+  try {
+    const no   = localStorage.getItem("stu_no");
+    const name = localStorage.getItem("stu_name");
+    if (no)   document.getElementById("stu-no").value   = no;
+    if (name) document.getElementById("stu-name").value = name;
+  } catch(e) {}
+}
+function clearStudentHistory() {
+  try { localStorage.removeItem("stu_no"); localStorage.removeItem("stu_name"); } catch(e) {}
+  document.getElementById("stu-no").value   = "";
+  document.getElementById("stu-name").value = "";
+}
+function clearStuMsg() {
+  document.getElementById("stu-err").classList.remove("show");
+  document.getElementById("stu-ok").classList.remove("show");
+}
+
+function updateRequiredHint() {
+  const sessions = parseInt(document.getElementById("edit-sessions").value) || 0;
+  const required = parseInt(document.getElementById("edit-required").value) || 0;
+  const hint     = document.getElementById("required-hint");
+  if (!hint) return;
+  if (sessions > 0 && required > 0) {
+    const rate = Math.round(required / sessions * 100);
+    hint.textContent = `全${sessions}回中 ${required}回以上で認定（${rate}%）`;
+    hint.style.color = required > sessions ? "var(--red)" : "var(--muted)";
+    if (required > sessions) hint.textContent += "　⚠️ 講義回数を超えています";
+  } else {
+    hint.textContent = "";
+  }
+}
+
 // ── utils ────────────────────────────────────────────────────────
 function genCode() { return String(Math.floor(1000 + Math.random() * 9000)); }
+
+async function forceStopAll() {
+  const count = Object.keys(activeSes).length;
+  if (count === 0) { alert("現在受付中の科目はありません"); return; }
+  if (!confirm(`受付中の科目が${count}件あります。すべて強制終了しますか？`)) return;
+  await db.ref("activeSessions").remove();
+  alert("すべての受付を終了しました");
+}
+function getTeacherName(tid) {
+  if (!tid || tid === "admin") return "管理者";
+  const t = Object.values(TEACHERS).find(t => t.id === tid);
+  return t ? t.name : tid;
+}
+function cookieKey(courseId, idx) { return `registered_${courseId}_${idx}`; }
+function hasCookie(key) { return document.cookie.split(";").some(c => c.trim().startsWith(key + "=")); }
+function setCookie(key) {
+  // 180日間有効
+  const expires = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toUTCString();
+  document.cookie = `${key}=1; expires=${expires}; path=/; SameSite=Lax`;
+}
 function fmtTime(iso) { try { return new Date(iso).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"}); } catch{return "";} }
 function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 </script>
