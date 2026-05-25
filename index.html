@@ -155,7 +155,10 @@
     <div class="flex-row" style="margin-bottom:18px">
       <p class="sec" style="margin:0">科目一覧</p>
       <span id="teacher-badge" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
-      <button class="btn btn-pri" style="margin-left:auto" onclick="showPage('edit',null)">＋ 科目追加</button>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-del btn-sm" id="force-stop-btn" onclick="forceStopAll()" style="display:none">⏹ 全受付強制終了</button>
+        <button class="btn btn-pri" onclick="showPage('edit',null)">＋ 科目追加</button>
+      </div>
     </div>
     <div id="course-list-body"></div>
   </div>
@@ -343,6 +346,15 @@ function renderCourseList() {
   // ログイン中の教員名バッジ
   const badge = document.getElementById("teacher-badge");
   if (badge && currentTeacher) badge.textContent = `ログイン中：${currentTeacher.name}`;
+
+  // 管理者のみ強制終了ボタンを表示、受付中があるときだけ有効化
+  const forceBtn = document.getElementById("force-stop-btn");
+  if (forceBtn) {
+    forceBtn.style.display = currentTeacher?.id === "admin" ? "" : "none";
+    const hasActive = Object.keys(activeSes).length > 0;
+    forceBtn.style.opacity = hasActive ? "1" : "0.4";
+    forceBtn.style.pointerEvents = hasActive ? "" : "none";
+  }
 
   // 管理者は全科目、教員は自分の科目だけ
   const entries = Object.entries(courses).filter(([id, c]) => {
@@ -579,11 +591,19 @@ function exportCSV() {
 function renderStudentCourses() {
   const sel = document.getElementById("stu-course");
   const cur = sel.value;
-  sel.innerHTML = `<option value="">-- 科目を選択 --</option>` +
-    Object.entries(courses).map(([id, c]) =>
-      `<option value="${id}">${esc(c.name)}${activeSes[id] ? "　●受付中" : ""}</option>`
-    ).join("");
-  sel.value = cur;
+  // 受付中の科目だけ表示
+  const activeEntries = Object.entries(courses).filter(([id]) => activeSes[id]);
+  if (activeEntries.length === 0) {
+    sel.innerHTML = `<option value="">-- 現在受付中の科目はありません --</option>`;
+  } else {
+    sel.innerHTML = `<option value="">-- 科目を選択 --</option>` +
+      activeEntries.map(([id, c]) =>
+        `<option value="${id}">${esc(c.name)}　第${activeSes[id].sessionIdx+1}回</option>`
+      ).join("");
+  }
+  // 以前選択していた科目が受付中なら維持、そうでなければリセット
+  sel.value = activeSes[cur] ? cur : "";
+  renderStudentStatus();
 }
 
 function renderStudentStatus() {
@@ -595,16 +615,8 @@ function renderStudentStatus() {
   if (ses)  { el.className="alert alert-info show"; el.textContent=`第${ses.sessionIdx+1}回　受付中`; }
   else      { el.className="alert alert-err show";  el.textContent="この科目は現在受付中ではありません"; }
 
-  // 受付中科目一覧
-  const active = Object.entries(courses).filter(([cid]) => activeSes[cid]);
-  const card   = document.getElementById("active-courses-card");
-  card.style.display = active.length ? "" : "none";
-  document.getElementById("active-courses-body").innerHTML = active.map(([cid, c]) =>
-    `<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
-      <span class="tag tag-red">● 受付中</span>
-      <span style="font-size:13px">${esc(c.name)}</span>
-      <span style="font-size:11px;color:var(--muted)">第${activeSes[cid].sessionIdx+1}回</span>
-    </div>`).join("");
+  // 受付中科目は選択肢に統合したのでカードは非表示
+  document.getElementById("active-courses-card").style.display = "none";
 }
 
 function onCourseSelect() {
@@ -663,6 +675,14 @@ async function submitAttendance() {
 
 // ── utils ────────────────────────────────────────────────────────
 function genCode() { return String(Math.floor(1000 + Math.random() * 9000)); }
+
+async function forceStopAll() {
+  const count = Object.keys(activeSes).length;
+  if (count === 0) { alert("現在受付中の科目はありません"); return; }
+  if (!confirm(`受付中の科目が${count}件あります。すべて強制終了しますか？`)) return;
+  await db.ref("activeSessions").remove();
+  alert("すべての受付を終了しました");
+}
 function getTeacherName(tid) {
   if (!tid || tid === "admin") return "管理者";
   const t = Object.values(TEACHERS).find(t => t.id === tid);
