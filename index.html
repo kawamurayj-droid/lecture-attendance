@@ -488,11 +488,12 @@ function renderAttendance(allData) {
   }
   document.getElementById("att-body").innerHTML = `
     <table>
-      <thead><tr><th>学籍番号</th><th>氏名</th><th>登録時刻</th><th></th></tr></thead>
+      <thead><tr><th>学籍番号</th><th>氏名</th><th>登録時刻</th><th>IPアドレス</th><th></th></tr></thead>
       <tbody>${records.map(([rid, r]) => `<tr>
         <td>${esc(r.studentNo)}</td>
         <td>${esc(r.name)}</td>
         <td>${fmtTime(r.time)}</td>
+        <td style="font-size:11px;color:var(--muted)">${esc(r.ip||"―")}</td>
         <td><button class="btn btn-del btn-sm" onclick="deleteRecord('${rid}')">削除</button></td>
       </tr>`).join("")}</tbody>
     </table>`;
@@ -507,7 +508,7 @@ async function deleteRecord(rid) {
 
 function exportCSV() {
   const rows = window._lastRecords || [];
-  const csv  = "\uFEFF学籍番号,氏名,登録時刻\n" + rows.map(r => `${r.studentNo},${r.name},${fmtTime(r.time)}`).join("\n");
+  const csv  = "\uFEFF学籍番号,氏名,登録時刻,IPアドレス\n" + rows.map(r => `${r.studentNo},${r.name},${fmtTime(r.time)},${r.ip||""}`).join("\n");
   const a    = document.createElement("a");
   a.href     = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
   a.download = `出席_第${sessionSelIdx+1}回.csv`;
@@ -568,17 +569,32 @@ async function submitAttendance() {
   if (!ses)               { showErr("この科目は現在受付中ではありません"); return; }
   if (ses.code !== code)  { showErr("出席コードが違います"); return; }
 
-  // 二重登録チェック
+  // Cookie による端末制限チェック
+  const cKey = cookieKey(courseId, ses.sessionIdx);
+  if (hasCookie(cKey)) {
+    showErr("この端末からはすでに出席登録済みです"); return;
+  }
+
+  // 二重登録チェック（学籍番号）
   const snap = await db.ref(`attendance/${courseId}/${ses.sessionIdx}`).once("value");
   const existing = snap.val();
   if (existing && Object.values(existing).some(r => r.studentNo === studentNo)) {
     showErr("すでに出席登録済みです"); return;
   }
 
+  // IPアドレス取得
+  let ip = "取得失敗";
+  try {
+    const ipRes = await fetch("https://api.ipify.org?format=json");
+    const ipJson = await ipRes.json();
+    ip = ipJson.ip;
+  } catch(e) { ip = "取得失敗"; }
+
   try {
     await db.ref(`attendance/${courseId}/${ses.sessionIdx}`).push({
-      studentNo, name, time: new Date().toISOString()
+      studentNo, name, time: new Date().toISOString(), ip
     });
+    setCookie(cookieKey(courseId, ses.sessionIdx));
     okEl.textContent = `「${courses[courseId]?.name}」第${ses.sessionIdx+1}回の出席を登録しました`;
     okEl.classList.add("show");
     document.getElementById("stu-code").value = "";
@@ -587,6 +603,13 @@ async function submitAttendance() {
 
 // ── utils ────────────────────────────────────────────────────────
 function genCode() { return String(Math.floor(1000 + Math.random() * 9000)); }
+function cookieKey(courseId, idx) { return `registered_${courseId}_${idx}`; }
+function hasCookie(key) { return document.cookie.split(";").some(c => c.trim().startsWith(key + "=")); }
+function setCookie(key) {
+  // 180日間有効
+  const expires = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toUTCString();
+  document.cookie = `${key}=1; expires=${expires}; path=/; SameSite=Lax`;
+}
 function fmtTime(iso) { try { return new Date(iso).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"}); } catch{return "";} }
 function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 </script>
