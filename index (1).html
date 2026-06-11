@@ -799,14 +799,7 @@ async function submitAttendance() {
     showErr("この端末からはすでに出席登録済みです"); return;
   }
 
-  // 二重登録チェック（学籍番号）
-  const snap = await db.ref(`attendance/${courseId}/${ses.sessionIdx}`).once("value");
-  const existing = snap.val();
-  if (existing && Object.values(existing).some(r => r.studentNo === studentNo)) {
-    showErr("すでに出席登録済みです"); return;
-  }
-
-  // IPアドレス取得
+  // IPアドレス取得（チェック前に取得しておく）
   let ip = "取得失敗";
   try {
     const ipRes = await fetch("https://api.ipify.org?format=json");
@@ -814,10 +807,28 @@ async function submitAttendance() {
     ip = ipJson.ip;
   } catch(e) { ip = "取得失敗"; }
 
+  // トランザクションで二重登録を確実に防止
+  // 学籍番号をキーにした専用パスを使い、同時アクセスでも1件しか書き込めない構造にする
+  const lockRef = db.ref(`attendance_lock/${courseId}/${ses.sessionIdx}/${studentNo.replace(/[.#$[\]]/g,"_")}`);
   try {
+    let alreadyExists = false;
+    await lockRef.transaction(current => {
+      if (current !== null) {
+        alreadyExists = true;
+        return; // undefinedを返すとabort（書き込まない）
+      }
+      return { name, time: new Date().toISOString(), ip };
+    });
+
+    if (alreadyExists) {
+      showErr("すでに出席登録済みです"); return;
+    }
+
+    // 本データも保存（一覧表示・CSV用）
     await db.ref(`attendance/${courseId}/${ses.sessionIdx}`).push({
       studentNo, name, time: new Date().toISOString(), ip
     });
+
     setCookie(cookieKey(courseId, ses.sessionIdx));
     saveStudentHistory(studentNo, name);
     okEl.textContent = `「${courses[courseId]?.name}」第${ses.sessionIdx+1}回の出席を登録しました`;
