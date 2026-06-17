@@ -178,6 +178,18 @@
       <div class="field"><label class="lbl">科目名</label><input id="edit-name" placeholder="例：社会福祉概論"></div>
       <div class="field"><label class="lbl">教室</label><input id="edit-room" placeholder="例：A301"></div>
       <div class="field"><label class="lbl">担当者（表示名）</label><input id="edit-instructor" placeholder="例：河村 太郎"></div>
+      <div class="field"><label class="lbl">授業コード（ユニバーサルパスポート用）</label><input id="edit-coursecode" placeholder="例：A1234567"></div>
+      <div class="field"><label class="lbl">時限（ユニバーサルパスポート用）</label>
+        <select id="edit-period">
+          <option value="">-- 未設定 --</option>
+          <option value="1">1限</option>
+          <option value="2">2限</option>
+          <option value="3">3限</option>
+          <option value="4">4限</option>
+          <option value="5">5限</option>
+          <option value="6">6限</option>
+        </select>
+      </div>
       <div class="field" id="teacher-check-field" style="display:none">
         <label class="lbl">担当教員（複数選択可）</label>
         <div id="teacher-checkboxes" style="display:flex;flex-wrap:wrap;gap:10px;padding:8px 0"></div>
@@ -243,6 +255,7 @@
         <div style="margin-left:auto;display:flex;gap:6px">
           <button class="btn btn-ghost btn-sm" id="rate-btn" onclick="exportRateCSV()" style="display:none">出席率CSV</button>
           <button class="btn btn-ghost btn-sm" id="csv-btn"  onclick="exportCSV()"     style="display:none">回別CSV</button>
+          <button class="btn btn-pri btn-sm"   id="up-btn"   onclick="exportUPCSV()"   style="display:none">UPシステム用CSV</button>
         </div>
       </div>
       <div id="att-body"></div>
@@ -441,6 +454,8 @@ function renderCourseList() {
         <span class="tag tag-purple">🏫 ${esc(c.room)}</span>
         <span class="tag tag-green">👤 ${esc(c.instructor)}</span>
         <span class="tag tag-yellow">📅 全${c.sessions}回</span>
+        ${c.courseCode ? `<span class="tag" style="background:#88888822;color:#666;border:1px solid #88888833">📑 ${esc(c.courseCode)}</span>` : ""}
+        ${c.period ? `<span class="tag" style="background:#88888822;color:#666;border:1px solid #88888833">🕐 ${c.period}限</span>` : ""}
         ${c.requiredSessions ? `<span class="tag" style="background:#4f5bd522;color:var(--accent);border:1px solid #4f5bd533">✅ ${c.requiredSessions}回以上で認定</span>` : ""}
         ${active ? `<span class="tag tag-red">● 受付中（第${activeSes[id].sessionIdx+1}回）</span>` : ""}
         ${currentTeacher?.id === "admin" ? `<span class="tag" style="background:#88888822;color:#888;border:1px solid #88888833">🔑 ${(c.teacherIds||[c.teacherId||""]).map(tid=>getTeacherName(tid)).join("・")}</span>` : ""}
@@ -464,6 +479,8 @@ function openEdit(idOrNull) {
   document.getElementById("edit-name").value             = c?.name       || "";
   document.getElementById("edit-room").value             = c?.room       || "";
   document.getElementById("edit-instructor").value       = c?.instructor || "";
+  document.getElementById("edit-coursecode").value       = c?.courseCode || "";
+  document.getElementById("edit-period").value           = c?.period     || "";
   document.getElementById("edit-sessions").value         = c?.sessions   || 15;
   document.getElementById("edit-err").classList.remove("show");
   document.getElementById("edit-required").value = c?.requiredSessions ?? "";
@@ -507,7 +524,9 @@ async function saveCourse() {
   }
   const reqVal = document.getElementById("edit-required").value;
   const requiredSessions = reqVal ? Number(reqVal) : null;
-  const data = { name, room, instructor, sessions, teacherIds };
+  const courseCode = document.getElementById("edit-coursecode").value.trim();
+  const period     = document.getElementById("edit-period").value;
+  const data = { name, room, instructor, sessions, teacherIds, courseCode, period };
   if (requiredSessions) data.requiredSessions = requiredSessions;
   else data.requiredSessions = null;
   try {
@@ -657,6 +676,7 @@ function renderAttendance(allData) {
   const records = allData[sessionSelIdx] ? Object.entries(allData[sessionSelIdx]) : [];
   document.getElementById("att-count").textContent = records.length + "名";
   document.getElementById("csv-btn").style.display  = records.length ? "" : "none";
+  document.getElementById("up-btn").style.display   = records.length ? "" : "none";
 
   // 出席率CSV：全回にデータがあれば表示
   const totalAtt = Object.keys(allData).length;
@@ -723,6 +743,30 @@ function exportCSV() {
   const a    = document.createElement("a");
   a.href     = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
   a.download = `出席_第${sessionSelIdx+1}回.csv`;
+  a.click();
+}
+
+function exportUPCSV() {
+  const rows   = window._lastRecords || [];
+  const course = courses[sessionCourseId];
+  if (!course) return;
+  if (rows.length === 0) { alert("この回の出席者がいません"); return; }
+
+  const courseCode = course.courseCode || "";
+  const periodMap  = {"1":"1限","2":"2限","3":"3限","4":"4限","5":"5限","6":"6限"};
+  const period     = periodMap[course.period] || "";
+  const today       = new Date();
+  const implDate    = `${today.getFullYear()}/${today.getMonth()+1}/${today.getDate()}`;
+
+  const header = "\uFEFF授業コード,授業科目,学籍番号,氏名,学生氏名＿カナ,学生氏名＿英語,実施日,時限,出欠区分";
+  const body = rows.map(r =>
+    `${courseCode},${course.name},${r.studentNo},${r.name},,,${implDate},${period},0`
+  ).join("\n");
+
+  const csv = header + "\n" + body;
+  const a   = document.createElement("a");
+  a.href    = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
+  a.download = `UP出席_${course.name}_第${sessionSelIdx+1}回.csv`;
   a.click();
 }
 
