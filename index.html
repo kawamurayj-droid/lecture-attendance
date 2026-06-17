@@ -746,13 +746,13 @@ function exportUPCSV() {
 
   const courseCode = course.courseCode || "";
   const period      = course.period || "";
-  const today       = new Date();
-  const implDate    = `${today.getFullYear()}/${today.getMonth()+1}/${today.getDate()}`;
 
   const header = "\uFEFF授業コード,授業科目,学籍番号,氏名,学生氏名＿カナ,学生氏名＿英語,実施日,時限,出欠区分";
-  const body = rows.map(r =>
-    `${courseCode},${course.name},${r.studentNo},${r.name},,,${implDate},${period},0`
-  ).join("\n");
+  const body = rows.map(r => {
+    const d = new Date(r.time); // 学生が登録した日時を使用
+    const implDate = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+    return `${courseCode},${course.name},${r.studentNo},${r.name},,,${implDate},${period},0`;
+  }).join("\n");
 
   const csv = header + "\n" + body;
   const a   = document.createElement("a");
