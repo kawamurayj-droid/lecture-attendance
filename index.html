@@ -179,16 +179,8 @@
       <div class="field"><label class="lbl">教室</label><input id="edit-room" placeholder="例：A301"></div>
       <div class="field"><label class="lbl">担当者（表示名）</label><input id="edit-instructor" placeholder="例：河村 太郎"></div>
       <div class="field"><label class="lbl">授業コード（ユニバーサルパスポート用）</label><input id="edit-coursecode" placeholder="例：A1234567"></div>
-      <div class="field"><label class="lbl">時限（ユニバーサルパスポート用）</label>
-        <select id="edit-period">
-          <option value="">-- 未設定 --</option>
-          <option value="1">1限</option>
-          <option value="2">2限</option>
-          <option value="3">3限</option>
-          <option value="4">4限</option>
-          <option value="5">5限</option>
-          <option value="6">6限</option>
-        </select>
+      <div class="field"><label class="lbl">時限（ユニバーサルパスポート用・半角数字）</label>
+        <input id="edit-period" type="number" min="1" max="9" placeholder="例：1">
       </div>
       <div class="field" id="teacher-check-field" style="display:none">
         <label class="lbl">担当教員（複数選択可）</label>
@@ -753,8 +745,7 @@ function exportUPCSV() {
   if (rows.length === 0) { alert("この回の出席者がいません"); return; }
 
   const courseCode = course.courseCode || "";
-  const periodMap  = {"1":"1限","2":"2限","3":"3限","4":"4限","5":"5限","6":"6限"};
-  const period     = periodMap[course.period] || "";
+  const period      = course.period || "";
   const today       = new Date();
   const implDate    = `${today.getFullYear()}/${today.getMonth()+1}/${today.getDate()}`;
 
