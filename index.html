@@ -449,7 +449,7 @@ function renderCourseList() {
         ${c.courseCode ? `<span class="tag" style="background:#88888822;color:#666;border:1px solid #88888833">📑 ${esc(c.courseCode)}</span>` : ""}
         ${c.period ? `<span class="tag" style="background:#88888822;color:#666;border:1px solid #88888833">🕐 ${c.period}限</span>` : ""}
         ${c.requiredSessions ? `<span class="tag" style="background:#4f5bd522;color:var(--accent);border:1px solid #4f5bd533">✅ ${c.requiredSessions}回以上で認定</span>` : ""}
-        ${active ? `<span class="tag tag-red">● 受付中（第${activeSes[id].sessionIdx+1}回）</span>` : ""}
+        ${active ? `<span class="tag tag-red">● 受付中（第${Number(activeSes[id].sessionIdx)+1}回）</span>` : ""}
         ${currentTeacher?.id === "admin" ? `<span class="tag" style="background:#88888822;color:#888;border:1px solid #88888833">🔑 ${(c.teacherIds||[c.teacherId||""]).map(tid=>getTeacherName(tid)).join("・")}</span>` : ""}
       </div>
       ${attSummary}
@@ -589,7 +589,7 @@ function selectSessionIdx(i) {
 
 function renderSessionCode() {
   const ses    = activeSes[sessionCourseId];
-  const active = ses && ses.sessionIdx === sessionSelIdx;
+  const active = ses && Number(ses.sessionIdx) === Number(sessionSelIdx);
 
   document.getElementById("start-controls").style.display = active ? "none" : "flex";
   document.getElementById("stop-controls").style.display  = active ? "flex" : "none";
@@ -641,7 +641,7 @@ function stopTimerLoop() { if (timerInterval) { clearInterval(timerInterval); ti
 async function startSession() {
   const timeVal = document.getElementById("auto-stop-time").value;
   const data = {
-    sessionIdx:   sessionSelIdx,
+    sessionIdx:   Number(sessionSelIdx),
     code:         genCode(),
     codeIssuedAt: Date.now(),
   };
@@ -826,7 +826,7 @@ function renderStudentStatus() {
   const ses = id ? activeSes[id] : null;
   if (!id)  { el.className="alert alert-info"; el.style.display="none"; el.textContent=""; return; }
   el.style.display = "block";
-  if (ses)  { el.className="alert alert-info show"; el.textContent=`第${ses.sessionIdx+1}回　受付中`; }
+  if (ses)  { el.className="alert alert-info show"; el.textContent=`第${Number(ses.sessionIdx)+1}回　受付中`; }
   else      { el.className="alert alert-err show";  el.textContent="この科目は現在受付中ではありません"; }
 
   // 受付中科目は選択肢に統合したのでカードは非表示
@@ -856,7 +856,7 @@ async function submitAttendance() {
   if (ses.code !== code)  { showErr("出席コードが違います"); return; }
 
   // Cookie による端末制限チェック
-  const cKey = cookieKey(courseId, ses.sessionIdx);
+  const cKey = cookieKey(courseId, Number(ses.sessionIdx));
   if (hasCookie(cKey)) {
     showErr("この端末からはすでに出席登録済みです"); return;
   }
@@ -871,7 +871,7 @@ async function submitAttendance() {
 
   // トランザクションで二重登録を確実に防止
   // 学籍番号をキーにした専用パスを使い、同時アクセスでも1件しか書き込めない構造にする
-  const lockRef = db.ref(`attendance_lock/${courseId}/${ses.sessionIdx}/${studentNo.replace(/[.#$[\]]/g,"_")}`);
+  const lockRef = db.ref(`attendance_lock/${courseId}/${Number(ses.sessionIdx)}/${studentNo.replace(/[.#$[\]]/g,"_")}`);
   try {
     let alreadyExists = false;
     await lockRef.transaction(current => {
@@ -887,13 +887,13 @@ async function submitAttendance() {
     }
 
     // 本データも保存（一覧表示・CSV用）
-    await db.ref(`attendance/${courseId}/${ses.sessionIdx}`).push({
+    await db.ref(`attendance/${courseId}/${Number(ses.sessionIdx)}`).push({
       studentNo, name, time: new Date().toISOString(), ip
     });
 
-    setCookie(cookieKey(courseId, ses.sessionIdx));
+    setCookie(cookieKey(courseId, Number(ses.sessionIdx)));
     saveStudentHistory(studentNo, name);
-    okEl.textContent = `「${courses[courseId]?.name}」第${ses.sessionIdx+1}回の出席を登録しました`;
+    okEl.textContent = `「${courses[courseId]?.name}」第${Number(ses.sessionIdx)+1}回の出席を登録しました`;
     okEl.classList.add("show");
     document.getElementById("stu-code").value = "";
   } catch(e) { showErr("登録に失敗しました: " + e.message); }
