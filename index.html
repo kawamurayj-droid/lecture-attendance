@@ -117,13 +117,30 @@
     <h1>Lecture Attendance</h1>
     <p>リアルタイム出席管理システム</p>
   </div>
-  <button class="btn btn-ghost btn-sm" id="back-btn" onclick="goBack()" style="display:none">← 戻る</button>
+  <div class="flex-row" style="gap:8px">
+    <button class="btn btn-ghost btn-sm" id="header-logout-btn" onclick="logoutStudent()" style="display:none">ログアウト</button>
+    <button class="btn btn-ghost btn-sm" id="back-btn" onclick="goBack()" style="display:none">← 戻る</button>
+  </div>
 </header>
 
 <div class="wrap">
 
+  <!-- ⓪ Googleログイン関門（最初に必ず通過） -->
+  <div class="page active" id="page-gate" style="max-width:400px;margin:0 auto">
+    <div class="card">
+      <p class="sec">本人確認</p>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+        利用の前に、NBUのGoogleアカウントでログインしてください。
+      </p>
+      <button class="btn btn-pri btn-full" onclick="loginWithGoogle()">Googleでログイン</button>
+    </div>
+  </div>
+
   <!-- ① ホーム -->
-  <div class="page active" id="page-home">
+  <div class="page" id="page-home">
+    <div class="alert alert-info show" style="margin-bottom:16px">
+      共有のパソコンで利用した場合は、使い終わったら必ず右上の「ログアウト」を押してください。
+    </div>
     <p style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px">モードを選択してください</p>
     <div class="mode-grid">
       <button class="mode-btn" onclick="showPage('student')">
@@ -270,78 +287,58 @@
 
   <!-- ⑥ 学生（出席登録） -->
   <div class="page" id="page-student" style="max-width:480px;margin:0 auto">
+    <div class="card">
+      <div class="alert alert-err" id="stu-err"></div>
+      <div class="alert alert-ok"  id="stu-ok"></div>
 
-    <!-- ログイン前に表示される部分 -->
-    <div class="card" id="student-gate">
-      <p class="sec">本人確認</p>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
-        出席登録の前に、NBUのGoogleアカウントでログインしてください。
-      </p>
-      <button class="btn btn-pri btn-full" onclick="loginWithGoogle()">Googleでログイン</button>
-    </div>
-
-    <!-- ログイン後に表示される、これまでのフォーム一式 -->
-    <div id="student-form-area" style="display:none">
-      <div class="card">
-        <div style="text-align:right;margin-bottom:8px">
-          <button type="button" onclick="logoutStudent()" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;text-decoration:underline">ログアウト</button>
+      <!-- ステップ1：科目選択＋学籍番号入力 -->
+      <div id="stu-step1">
+        <p class="sec">出席登録　①科目・学籍番号</p>
+        <div class="field"><label class="lbl">科目選択</label>
+          <select id="stu-course" onchange="onCourseSelect()">
+            <option value="">-- 科目を選択 --</option>
+          </select>
         </div>
-        <div class="alert alert-info show" style="margin-bottom:12px">
-          共有のパソコンで利用した場合は、登録後に必ず「ログアウト」を押してください。
+        <div class="alert alert-info show" id="stu-status" style="margin-bottom:12px"></div>
+        <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001" oninput="clearStuMsg()"></div>
+        <div style="text-align:right;margin-top:-8px;margin-bottom:8px">
+          <button type="button" onclick="clearStudentHistory()" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;text-decoration:underline">入力履歴をクリア</button>
         </div>
-        <div class="alert alert-err" id="stu-err"></div>
-        <div class="alert alert-ok"  id="stu-ok"></div>
+        <button class="btn btn-pri btn-full" onclick="goToConfirm()">次へ（確認画面）</button>
+      </div>
 
-        <!-- ステップ1：科目選択＋学籍番号入力 -->
-        <div id="stu-step1">
-          <p class="sec">出席登録　①科目・学籍番号</p>
-          <div class="field"><label class="lbl">科目選択</label>
-            <select id="stu-course" onchange="onCourseSelect()">
-              <option value="">-- 科目を選択 --</option>
-            </select>
-          </div>
-          <div class="alert alert-info show" id="stu-status" style="margin-bottom:12px"></div>
-          <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001" oninput="clearStuMsg()"></div>
-          <div style="text-align:right;margin-top:-8px;margin-bottom:8px">
-            <button type="button" onclick="clearStudentHistory()" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;text-decoration:underline">入力履歴をクリア</button>
-          </div>
-          <button class="btn btn-pri btn-full" onclick="goToConfirm()">次へ（確認画面）</button>
+      <!-- ステップ2：学籍番号の確認 -->
+      <div id="stu-step2" style="display:none">
+        <p class="sec">出席登録　②学籍番号の確認</p>
+        <div class="code-box" style="margin-bottom:16px">
+          <div class="code-sub" style="margin-top:0;margin-bottom:8px">入力された学籍番号</div>
+          <div class="code-big" id="stu-confirm-no" style="font-size:36px;letter-spacing:4px">--------</div>
         </div>
-
-        <!-- ステップ2：学籍番号の確認 -->
-        <div id="stu-step2" style="display:none">
-          <p class="sec">出席登録　②学籍番号の確認</p>
-          <div class="code-box" style="margin-bottom:16px">
-            <div class="code-sub" style="margin-top:0;margin-bottom:8px">入力された学籍番号</div>
-            <div class="code-big" id="stu-confirm-no" style="font-size:36px;letter-spacing:4px">--------</div>
-          </div>
-          <p style="text-align:center;font-size:13px;color:var(--muted);margin-bottom:16px">この番号で間違いありませんか？</p>
-          <div class="flex-row">
-            <button class="btn btn-sec" style="flex:1;justify-content:center" onclick="backToStep1()">修正する</button>
-            <button class="btn btn-succ" style="flex:1;justify-content:center" onclick="goToStep3()">間違いありません</button>
-          </div>
-        </div>
-
-        <!-- ステップ3：出席コード入力＋登録 -->
-        <div id="stu-step3" style="display:none">
-          <p class="sec">出席登録　③出席コード入力</p>
-          <div class="alert alert-info show" style="margin-bottom:14px">
-            学籍番号：<b id="stu-step3-no" style="letter-spacing:2px"></b>
-            <button type="button" onclick="backToStep1()" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer;font-family:inherit;text-decoration:underline;margin-left:8px">変更する</button>
-          </div>
-          <div class="field"><label class="lbl">出席コード（4桁）</label>
-            <input id="stu-code" maxlength="4" placeholder="0000" class="pin-input"
-              onkeydown="if(event.key==='Enter')submitAttendance()">
-          </div>
-          <button class="btn btn-pri btn-full" onclick="submitAttendance()">出席登録</button>
+        <p style="text-align:center;font-size:13px;color:var(--muted);margin-bottom:16px">この番号で間違いありませんか？</p>
+        <div class="flex-row">
+          <button class="btn btn-sec" style="flex:1;justify-content:center" onclick="backToStep1()">修正する</button>
+          <button class="btn btn-succ" style="flex:1;justify-content:center" onclick="goToStep3()">間違いありません</button>
         </div>
       </div>
-      <div class="card" id="active-courses-card" style="display:none">
-        <p class="sec">現在受付中の科目</p>
-        <div id="active-courses-body"></div>
+
+      <!-- ステップ3：出席コード入力＋登録 -->
+      <div id="stu-step3" style="display:none">
+        <p class="sec">出席登録　③出席コード入力</p>
+        <div class="alert alert-info show" style="margin-bottom:14px">
+          学籍番号：<b id="stu-step3-no" style="letter-spacing:2px"></b>
+          <button type="button" onclick="backToStep1()" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer;font-family:inherit;text-decoration:underline;margin-left:8px">変更する</button>
+        </div>
+        <div class="field"><label class="lbl">出席コード（4桁）</label>
+          <input id="stu-code" maxlength="4" placeholder="0000" class="pin-input"
+            onkeydown="if(event.key==='Enter')submitAttendance()">
+        </div>
+        <button class="btn btn-pri btn-full" onclick="submitAttendance()">出席登録</button>
       </div>
     </div>
-
+    <div class="card" id="active-courses-card" style="display:none">
+      <p class="sec">現在受付中の科目</p>
+      <div id="active-courses-body"></div>
+    </div>
   </div>
 
 </div><!-- /wrap -->
@@ -363,15 +360,21 @@ const auth = firebase.auth();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 googleProvider.setCustomParameters({ hd: "nbu.ac.jp" }); // NBUドメインを候補に絞る
 let currentUser = null; // ログイン済みならFirebaseのuser情報が入る
+let listenersAttached = false;
 
 auth.onAuthStateChanged(user => {
+  const logoutBtn = document.getElementById("header-logout-btn");
   if (user && user.email && user.email.endsWith("@nbu.ac.jp")) {
     currentUser = user;
+    logoutBtn.style.display = "";
+    if (!listenersAttached) { attachDataListeners(); listenersAttached = true; }
+    showPage("home");
   } else {
     currentUser = null;
     if (user) auth.signOut(); // NBU以外のアカウントは強制サインアウト
+    logoutBtn.style.display = "none";
+    showPage("gate");
   }
-  if (currentPage === "student") renderStudentGate();
 });
 
 async function loginWithGoogle() {
@@ -386,18 +389,6 @@ async function loginWithGoogle() {
   }
 }
 
-function renderStudentGate() {
-  const gate = document.getElementById("student-gate");
-  const form = document.getElementById("student-form-area");
-  if (currentUser) {
-    gate.style.display = "none";
-    form.style.display = "";
-  } else {
-    gate.style.display = "";
-    form.style.display = "none";
-  }
-}
-
 async function logoutStudent() {
   await auth.signOut();
 }
@@ -406,30 +397,32 @@ async function logoutStudent() {
 let courses      = {};
 let activeSes    = {};
 let allAttendance = {}; // 全出席データ（科目一覧の件数表示用）
-let currentPage  = "home";
+let currentPage  = "gate";
 let prevPage     = "home";
 let sessionCourseId = null;
 let sessionSelIdx   = 0;
 let timerInterval   = null;
 let attUnsubscribe  = null;
 
-// ── Firebase 購読 ─────────────────────────────────────────────────
-db.ref("courses").on("value", snap => {
-  courses = snap.val() || {};
-  if (currentPage === "list")    renderCourseList();
-  if (currentPage === "student") renderStudentCourses();
-  if (currentPage === "session") renderSessionCourse();
-});
-db.ref("activeSessions").on("value", snap => {
-  activeSes = snap.val() || {};
-  if (currentPage === "session") renderSessionCode();
-  if (currentPage === "student") renderStudentStatus();
-  if (currentPage === "list")    renderCourseList();
-});
-db.ref("attendance").on("value", snap => {
-  allAttendance = snap.val() || {};
-  if (currentPage === "list") renderCourseList();
-});
+// ── Firebase 購読（ログイン確認後に一度だけ開始） ──────────────────
+function attachDataListeners() {
+  db.ref("courses").on("value", snap => {
+    courses = snap.val() || {};
+    if (currentPage === "list")    renderCourseList();
+    if (currentPage === "student") renderStudentCourses();
+    if (currentPage === "session") renderSessionCourse();
+  });
+  db.ref("activeSessions").on("value", snap => {
+    activeSes = snap.val() || {};
+    if (currentPage === "session") renderSessionCode();
+    if (currentPage === "student") renderStudentStatus();
+    if (currentPage === "list")    renderCourseList();
+  });
+  db.ref("attendance").on("value", snap => {
+    allAttendance = snap.val() || {};
+    if (currentPage === "list") renderCourseList();
+  });
+}
 
 // ── ページ遷移 ────────────────────────────────────────────────────
 function showPage(name, extra) {
@@ -437,12 +430,12 @@ function showPage(name, extra) {
   currentPage = name;
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
   document.getElementById("page-" + name).classList.add("active");
-  document.getElementById("back-btn").style.display = name === "home" ? "none" : "";
+  document.getElementById("back-btn").style.display = (name === "home" || name === "gate") ? "none" : "";
 
   if (name === "list")    renderCourseList();
   if (name === "edit")    openEdit(extra);
   if (name === "session") openSession(extra);
-  if (name === "student") { renderStudentCourses(); renderStudentStatus(); loadStudentHistory(); renderStudentGate(); }
+  if (name === "student") { renderStudentCourses(); renderStudentStatus(); loadStudentHistory(); }
   if (name === "mycheck") {
     document.getElementById("mc-err").classList.remove("show");
     document.getElementById("mc-results").innerHTML = "";
