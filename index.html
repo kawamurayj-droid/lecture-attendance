@@ -283,6 +283,12 @@
     <!-- ログイン後に表示される、これまでのフォーム一式 -->
     <div id="student-form-area" style="display:none">
       <div class="card">
+        <div style="text-align:right;margin-bottom:8px">
+          <button type="button" onclick="logoutStudent()" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;text-decoration:underline">ログアウト</button>
+        </div>
+        <div class="alert alert-info show" style="margin-bottom:12px">
+          共有のパソコンで利用した場合は、登録後に必ず「ログアウト」を押してください。
+        </div>
         <p class="sec">出席登録</p>
         <div class="alert alert-err" id="stu-err"></div>
         <div class="alert alert-ok"  id="stu-ok"></div>
@@ -363,6 +369,10 @@ function renderStudentGate() {
     gate.style.display = "";
     form.style.display = "none";
   }
+}
+
+async function logoutStudent() {
+  await auth.signOut();
 }
 
 // ── 状態 ─────────────────────────────────────────────────────────
