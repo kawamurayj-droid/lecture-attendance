@@ -6,6 +6,7 @@
 <title>講義出席管理システム</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-database-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-auth-compat.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -269,31 +270,45 @@
 
   <!-- ⑥ 学生（出席登録） -->
   <div class="page" id="page-student" style="max-width:480px;margin:0 auto">
-    <div class="card">
-      <p class="sec">出席登録</p>
-      <div class="alert alert-err" id="stu-err"></div>
-      <div class="alert alert-ok"  id="stu-ok"></div>
-      <div class="field"><label class="lbl">科目選択</label>
-        <select id="stu-course" onchange="onCourseSelect()">
-          <option value="">-- 科目を選択 --</option>
-        </select>
-      </div>
-      <div class="alert alert-info show" id="stu-status" style="margin-bottom:12px"></div>
-      <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001" oninput="clearStuMsg()"></div>
-      <div class="field"><label class="lbl">氏名</label><input id="stu-name" placeholder="例：山田 花子" oninput="clearStuMsg()"></div>
-      <div style="text-align:right;margin-top:-8px;margin-bottom:8px">
-        <button type="button" onclick="clearStudentHistory()" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;text-decoration:underline">入力履歴をクリア</button>
-      </div>
-      <div class="field"><label class="lbl">出席コード（4桁）</label>
-        <input id="stu-code" maxlength="4" placeholder="0000" class="pin-input"
-          onkeydown="if(event.key==='Enter')submitAttendance()">
-      </div>
-      <button class="btn btn-pri btn-full" onclick="submitAttendance()">出席登録</button>
+
+    <!-- ログイン前に表示される部分 -->
+    <div class="card" id="student-gate">
+      <p class="sec">本人確認</p>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+        出席登録の前に、NBUのGoogleアカウントでログインしてください。
+      </p>
+      <button class="btn btn-pri btn-full" onclick="loginWithGoogle()">Googleでログイン</button>
     </div>
-    <div class="card" id="active-courses-card" style="display:none">
-      <p class="sec">現在受付中の科目</p>
-      <div id="active-courses-body"></div>
+
+    <!-- ログイン後に表示される、これまでのフォーム一式 -->
+    <div id="student-form-area" style="display:none">
+      <div class="card">
+        <p class="sec">出席登録</p>
+        <div class="alert alert-err" id="stu-err"></div>
+        <div class="alert alert-ok"  id="stu-ok"></div>
+        <div class="field"><label class="lbl">科目選択</label>
+          <select id="stu-course" onchange="onCourseSelect()">
+            <option value="">-- 科目を選択 --</option>
+          </select>
+        </div>
+        <div class="alert alert-info show" id="stu-status" style="margin-bottom:12px"></div>
+        <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001" oninput="clearStuMsg()"></div>
+        <div class="field"><label class="lbl">氏名</label><input id="stu-name" placeholder="例：山田 花子" oninput="clearStuMsg()"></div>
+        <div style="text-align:right;margin-top:-8px;margin-bottom:8px">
+          <button type="button" onclick="clearStudentHistory()" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;text-decoration:underline">入力履歴をクリア</button>
+        </div>
+        <div class="field"><label class="lbl">出席コード（4桁）</label>
+          <input id="stu-code" maxlength="4" placeholder="0000" class="pin-input"
+            onkeydown="if(event.key==='Enter')submitAttendance()">
+        </div>
+        <button class="btn btn-pri btn-full" onclick="submitAttendance()">出席登録</button>
+      </div>
+      <div class="card" id="active-courses-card" style="display:none">
+        <p class="sec">現在受付中の科目</p>
+        <div id="active-courses-body"></div>
+      </div>
     </div>
+
   </div>
 
 </div><!-- /wrap -->
@@ -308,6 +323,46 @@ firebase.initializeApp({
   appId:             "1:1074810980063:web:c8c0280133354ccb618b6a",
 });
 const db = firebase.database();
+
+// ── Google認証 ─────────────────────────────────────────────────
+const auth = firebase.auth();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+googleProvider.setCustomParameters({ hd: "nbu.ac.jp" }); // NBUドメインを候補に絞る
+let currentUser = null; // ログイン済みならFirebaseのuser情報が入る
+
+auth.onAuthStateChanged(user => {
+  if (user && user.email && user.email.endsWith("@nbu.ac.jp")) {
+    currentUser = user;
+  } else {
+    currentUser = null;
+    if (user) auth.signOut(); // NBU以外のアカウントは強制サインアウト
+  }
+  if (currentPage === "student") renderStudentGate();
+});
+
+async function loginWithGoogle() {
+  try {
+    const result = await auth.signInWithPopup(googleProvider);
+    if (!result.user.email.endsWith("@nbu.ac.jp")) {
+      await auth.signOut();
+      alert("NBUのGoogleアカウントでログインしてください");
+    }
+  } catch (e) {
+    alert("ログインに失敗しました: " + e.message);
+  }
+}
+
+function renderStudentGate() {
+  const gate = document.getElementById("student-gate");
+  const form = document.getElementById("student-form-area");
+  if (currentUser) {
+    gate.style.display = "none";
+    form.style.display = "";
+  } else {
+    gate.style.display = "";
+    form.style.display = "none";
+  }
+}
 
 // ── 状態 ─────────────────────────────────────────────────────────
 let courses      = {};
@@ -349,7 +404,7 @@ function showPage(name, extra) {
   if (name === "list")    renderCourseList();
   if (name === "edit")    openEdit(extra);
   if (name === "session") openSession(extra);
-  if (name === "student") { renderStudentCourses(); renderStudentStatus(); loadStudentHistory(); }
+  if (name === "student") { renderStudentCourses(); renderStudentStatus(); loadStudentHistory(); renderStudentGate(); }
   if (name === "mycheck") {
     document.getElementById("mc-err").classList.remove("show");
     document.getElementById("mc-results").innerHTML = "";
