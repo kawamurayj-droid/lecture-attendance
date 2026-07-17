@@ -289,27 +289,52 @@
         <div class="alert alert-info show" style="margin-bottom:12px">
           共有のパソコンで利用した場合は、登録後に必ず「ログアウト」を押してください。
         </div>
-        <p class="sec">出席登録</p>
         <div class="alert alert-err" id="stu-err"></div>
         <div class="alert alert-ok"  id="stu-ok"></div>
-        <div class="field"><label class="lbl">科目選択</label>
-          <select id="stu-course" onchange="onCourseSelect()">
-            <option value="">-- 科目を選択 --</option>
-          </select>
+
+        <!-- ステップ1：科目選択＋学籍番号入力 -->
+        <div id="stu-step1">
+          <p class="sec">出席登録　①科目・学籍番号</p>
+          <div class="field"><label class="lbl">科目選択</label>
+            <select id="stu-course" onchange="onCourseSelect()">
+              <option value="">-- 科目を選択 --</option>
+            </select>
+          </div>
+          <div class="alert alert-info show" id="stu-status" style="margin-bottom:12px"></div>
+          <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001" oninput="clearStuMsg()"></div>
+          <div style="text-align:right;margin-top:-8px;margin-bottom:8px">
+            <button type="button" onclick="clearStudentHistory()" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;text-decoration:underline">入力履歴をクリア</button>
+          </div>
+          <button class="btn btn-pri btn-full" onclick="goToConfirm()">次へ（確認画面）</button>
         </div>
-        <div class="alert alert-info show" id="stu-status" style="margin-bottom:12px"></div>
-        <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001" oninput="onStuNoInput()"></div>
-        <div id="stu-no-confirm" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;margin:-4px 0 13px;font-size:11px;color:var(--muted)">
-          入力された学籍番号：<span id="stu-no-confirm-val" style="font-size:16px;font-weight:700;color:var(--text);letter-spacing:2px"></span>　間違いがないか確認してください
+
+        <!-- ステップ2：学籍番号の確認 -->
+        <div id="stu-step2" style="display:none">
+          <p class="sec">出席登録　②学籍番号の確認</p>
+          <div class="code-box" style="margin-bottom:16px">
+            <div class="code-sub" style="margin-top:0;margin-bottom:8px">入力された学籍番号</div>
+            <div class="code-big" id="stu-confirm-no" style="font-size:36px;letter-spacing:4px">--------</div>
+          </div>
+          <p style="text-align:center;font-size:13px;color:var(--muted);margin-bottom:16px">この番号で間違いありませんか？</p>
+          <div class="flex-row">
+            <button class="btn btn-sec" style="flex:1;justify-content:center" onclick="backToStep1()">修正する</button>
+            <button class="btn btn-succ" style="flex:1;justify-content:center" onclick="goToStep3()">間違いありません</button>
+          </div>
         </div>
-        <div style="text-align:right;margin-top:-8px;margin-bottom:8px">
-          <button type="button" onclick="clearStudentHistory()" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;text-decoration:underline">入力履歴をクリア</button>
+
+        <!-- ステップ3：出席コード入力＋登録 -->
+        <div id="stu-step3" style="display:none">
+          <p class="sec">出席登録　③出席コード入力</p>
+          <div class="alert alert-info show" style="margin-bottom:14px">
+            学籍番号：<b id="stu-step3-no" style="letter-spacing:2px"></b>
+            <button type="button" onclick="backToStep1()" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer;font-family:inherit;text-decoration:underline;margin-left:8px">変更する</button>
+          </div>
+          <div class="field"><label class="lbl">出席コード（4桁）</label>
+            <input id="stu-code" maxlength="4" placeholder="0000" class="pin-input"
+              onkeydown="if(event.key==='Enter')submitAttendance()">
+          </div>
+          <button class="btn btn-pri btn-full" onclick="submitAttendance()">出席登録</button>
         </div>
-        <div class="field"><label class="lbl">出席コード（4桁）</label>
-          <input id="stu-code" maxlength="4" placeholder="0000" class="pin-input"
-            onkeydown="if(event.key==='Enter')submitAttendance()">
-        </div>
-        <button class="btn btn-pri btn-full" onclick="submitAttendance()">出席登録</button>
       </div>
       <div class="card" id="active-courses-card" style="display:none">
         <p class="sec">現在受付中の科目</p>
@@ -962,7 +987,35 @@ async function submitAttendance() {
     okEl.textContent = `「${courses[courseId]?.name}」第${Number(ses.sessionIdx)+1}回の出席を登録しました`;
     okEl.classList.add("show");
     document.getElementById("stu-code").value = "";
+    document.getElementById("stu-no").value = "";
+    showStuStep(1);
   } catch(e) { showErr("登録に失敗しました: " + e.message); }
+}
+
+// ── ステップ切り替え（学籍番号の確認画面をはさむ） ──────────────────
+function showStuStep(n) {
+  document.getElementById("stu-step1").style.display = n === 1 ? "" : "none";
+  document.getElementById("stu-step2").style.display = n === 2 ? "" : "none";
+  document.getElementById("stu-step3").style.display = n === 3 ? "" : "none";
+}
+function goToConfirm() {
+  clearStuMsg();
+  const courseId  = document.getElementById("stu-course").value;
+  const studentNo = document.getElementById("stu-no").value.trim();
+  const errEl = document.getElementById("stu-err");
+  if (!courseId)  { errEl.textContent = "科目を選択してください";     errEl.classList.add("show"); return; }
+  if (!studentNo) { errEl.textContent = "学籍番号を入力してください"; errEl.classList.add("show"); return; }
+  document.getElementById("stu-confirm-no").textContent = studentNo;
+  showStuStep(2);
+}
+function backToStep1() {
+  showStuStep(1);
+}
+function goToStep3() {
+  const studentNo = document.getElementById("stu-no").value.trim();
+  document.getElementById("stu-step3-no").textContent = studentNo;
+  showStuStep(3);
+  setTimeout(() => document.getElementById("stu-code").focus(), 100);
 }
 
 // ── 学生入力履歴（LocalStorage） ────────────────────────────────
@@ -972,29 +1025,17 @@ function saveStudentHistory(studentNo) {
 function loadStudentHistory() {
   try {
     const no = localStorage.getItem("stu_no");
-    if (no) { document.getElementById("stu-no").value = no; onStuNoInput(); }
+    if (no) document.getElementById("stu-no").value = no;
   } catch(e) {}
+  showStuStep(1);
 }
 function clearStudentHistory() {
   try { localStorage.removeItem("stu_no"); } catch(e) {}
   document.getElementById("stu-no").value = "";
-  onStuNoInput();
 }
 function clearStuMsg() {
   document.getElementById("stu-err").classList.remove("show");
   document.getElementById("stu-ok").classList.remove("show");
-}
-function onStuNoInput() {
-  clearStuMsg();
-  const val = document.getElementById("stu-no").value.trim();
-  const box = document.getElementById("stu-no-confirm");
-  const valEl = document.getElementById("stu-no-confirm-val");
-  if (val) {
-    valEl.textContent = val;
-    box.style.display = "";
-  } else {
-    box.style.display = "none";
-  }
 }
 
 function updateRequiredHint() {
