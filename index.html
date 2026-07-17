@@ -118,7 +118,7 @@
     <p>リアルタイム出席管理システム</p>
   </div>
   <div class="flex-row" style="gap:8px">
-    <button class="btn btn-ghost btn-sm" id="header-logout-btn" onclick="logoutStudent()" style="display:none">ログアウト</button>
+    <button class="btn btn-sm" id="header-logout-btn" onclick="logoutStudent()" style="display:none;font-weight:700;background:var(--red);color:#fff;border:1px solid var(--red)">🔓 ログアウト</button>
     <button class="btn btn-ghost btn-sm" id="back-btn" onclick="goBack()" style="display:none">← 戻る</button>
   </div>
 </header>
@@ -138,8 +138,8 @@
 
   <!-- ① ホーム -->
   <div class="page" id="page-home">
-    <div class="alert alert-info show" style="margin-bottom:16px">
-      共有のパソコンで利用した場合は、使い終わったら必ず右上の「ログアウト」を押してください。
+    <div style="background:#ff6b6b15;border:2px solid var(--red);border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:13px;color:var(--red);font-weight:700;line-height:1.6;text-align:center">
+      ⚠️ 共有のパソコンで利用した場合は、使い終わったら必ず右上の「🔓 ログアウト」を押してください。
     </div>
     <p style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px">モードを選択してください</p>
     <div class="mode-grid">
