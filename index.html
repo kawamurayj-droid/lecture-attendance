@@ -298,8 +298,10 @@
           </select>
         </div>
         <div class="alert alert-info show" id="stu-status" style="margin-bottom:12px"></div>
-        <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001" oninput="clearStuMsg()"></div>
-        <div class="field"><label class="lbl">氏名</label><input id="stu-name" placeholder="例：山田 花子" oninput="clearStuMsg()"></div>
+        <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001" oninput="onStuNoInput()"></div>
+        <div id="stu-no-confirm" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;margin:-4px 0 13px;font-size:11px;color:var(--muted)">
+          入力された学籍番号：<span id="stu-no-confirm-val" style="font-size:16px;font-weight:700;color:var(--text);letter-spacing:2px"></span>　間違いがないか確認してください
+        </div>
         <div style="text-align:right;margin-top:-8px;margin-bottom:8px">
           <button type="button" onclick="clearStudentHistory()" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;text-decoration:underline">入力履歴をクリア</button>
         </div>
@@ -754,7 +756,7 @@ function renderAttendance(allData) {
     const studentMap = {};
     Object.entries(allData).forEach(([idx, sd]) => {
       Object.values(sd).forEach(r => {
-        if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { name: r.name, count: 0 };
+        if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { count: 0 };
         studentMap[r.studentNo].count++;
       });
     });
@@ -762,7 +764,7 @@ function renderAttendance(allData) {
     warningEl.innerHTML = atRisk.length
       ? `<div style="padding:10px 14px;background:#ff6b6b11;border:1px solid #ff6b6b33;border-radius:8px;margin-bottom:12px;font-size:12px;color:var(--red)">
           ⚠️ 認定ライン（${required}回）未達：${atRisk.length}名
-          <span style="color:var(--muted);margin-left:8px">${atRisk.map(([,s])=>s.name).join("・")}</span>
+          <span style="color:var(--muted);margin-left:8px">${atRisk.map(([no])=>no).join("・")}</span>
         </div>`
       : `<div style="padding:10px 14px;background:#2ecc7111;border:1px solid #2ecc7133;border-radius:8px;margin-bottom:12px;font-size:12px;color:var(--green)">
           ✅ 全員が認定ライン（${required}回）を達成しています
@@ -779,10 +781,9 @@ function renderAttendance(allData) {
   }
   document.getElementById("att-body").innerHTML = `
     <table>
-      <thead><tr><th>学籍番号</th><th>氏名</th><th>登録時刻</th><th>IPアドレス</th><th></th></tr></thead>
+      <thead><tr><th>学籍番号</th><th>登録時刻</th><th>IPアドレス</th><th></th></tr></thead>
       <tbody>${records.map(([rid, r]) => `<tr>
         <td>${esc(r.studentNo)}</td>
-        <td>${esc(r.name)}</td>
         <td>${fmtTime(r.time)}</td>
         <td style="font-size:11px;color:var(--muted)">${esc(r.ip||"―")}</td>
         <td><button class="btn btn-del btn-sm" onclick="deleteRecord('${rid}')">削除</button></td>
@@ -797,7 +798,7 @@ async function deleteRecord(rid) {
 
 function exportCSV() {
   const rows = window._lastRecords || [];
-  const csv  = "\uFEFF学籍番号,氏名,登録時刻,IPアドレス\n" + rows.map(r => `${r.studentNo},${r.name},${fmtTime(r.time)},${r.ip||""}`).join("\n");
+  const csv  = "\uFEFF学籍番号,登録時刻,IPアドレス\n" + rows.map(r => `${r.studentNo},${fmtTime(r.time)},${r.ip||""}`).join("\n");
   const a    = document.createElement("a");
   a.href     = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
   a.download = `出席_第${sessionSelIdx+1}回.csv`;
@@ -813,11 +814,11 @@ function exportUPCSV() {
   const courseCode = course.courseCode || "";
   const period      = course.period || "";
 
-  const header = "\uFEFF授業コード,授業科目,学籍番号,氏名,学生氏名＿カナ,学生氏名＿英語,実施日,時限,出欠区分";
+  const header = "\uFEFF授業コード,授業科目,学籍番号,実施日,時限,出欠区分";
   const body = rows.map(r => {
     const d = new Date(r.time); // 学生が登録した日時を使用
     const implDate = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
-    return `${courseCode},${course.name},${r.studentNo},${r.name},,,${implDate},${period},0`;
+    return `${courseCode},${course.name},${r.studentNo},${implDate},${period},0`;
   }).join("\n");
 
   const csv = header + "\n" + body;
@@ -834,19 +835,19 @@ function exportRateCSV() {
   const total    = course.sessions;
 
   // 全学生を収集
-  const studentMap = {}; // { studentNo: { name, counts: Set } }
+  const studentMap = {}; // { studentNo: { attended: Set } }
   Object.entries(allData).forEach(([idx, sessionData]) => {
     Object.values(sessionData).forEach(r => {
-      if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { name: r.name, attended: new Set() };
+      if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { attended: new Set() };
       studentMap[r.studentNo].attended.add(Number(idx));
     });
   });
 
-  // ヘッダー行：学籍番号,氏名,出席回数,総回数,出席率,第1回,第2回,...
+  // ヘッダー行：学籍番号,出席回数,総回数,出席率,第1回,第2回,...
   const required     = course.requiredSessions || null;
   const roundHeaders = Array.from({length: total}, (_, i) => `第${i+1}回`).join(",");
   const certCol      = required ? ",認定" : "";
-  const header       = `\uFEFF学籍番号,氏名,出席回数,総回数,出席率${certCol},${roundHeaders}`;
+  const header       = `\uFEFF学籍番号,出席回数,総回数,出席率${certCol},${roundHeaders}`;
 
   // データ行
   const rows = Object.entries(studentMap)
@@ -857,7 +858,7 @@ function exportRateCSV() {
       const cert    = required ? (count >= required ? "○" : "×") : "";
       const certVal = required ? `,${cert}` : "";
       const rounds  = Array.from({length: total}, (_, i) => s.attended.has(i) ? "○" : "―").join(",");
-      return `${no},${s.name},${count},${total},${rate}%${certVal},${rounds}`;
+      return `${no},${count},${total},${rate}%${certVal},${rounds}`;
     });
 
   const csv = header + "\n" + rows.join("\n");
@@ -908,7 +909,6 @@ function onCourseSelect() {
 async function submitAttendance() {
   const courseId  = document.getElementById("stu-course").value;
   const studentNo = document.getElementById("stu-no").value.trim();
-  const name      = document.getElementById("stu-name").value.trim();
   const code      = document.getElementById("stu-code").value.trim();
   const errEl     = document.getElementById("stu-err");
   const okEl      = document.getElementById("stu-ok");
@@ -916,7 +916,7 @@ async function submitAttendance() {
 
   const showErr = msg => { errEl.textContent=msg; errEl.classList.add("show"); };
 
-  if (!courseId || !studentNo || !name || !code) { showErr("すべての項目を入力してください"); return; }
+  if (!courseId || !studentNo || !code) { showErr("すべての項目を入力してください"); return; }
   const ses = activeSes[courseId];
   if (!ses)               { showErr("この科目は現在受付中ではありません"); return; }
   if (ses.code !== code)  { showErr("出席コードが違います"); return; }
@@ -945,7 +945,7 @@ async function submitAttendance() {
         alreadyExists = true;
         return; // undefinedを返すとabort（書き込まない）
       }
-      return { name, time: new Date().toISOString(), ip };
+      return { time: new Date().toISOString(), ip };
     });
 
     if (alreadyExists) {
@@ -954,11 +954,11 @@ async function submitAttendance() {
 
     // 本データも保存（一覧表示・CSV用）
     await db.ref(`attendance/${courseId}/${Number(ses.sessionIdx)}`).push({
-      studentNo, name, time: new Date().toISOString(), ip
+      studentNo, time: new Date().toISOString(), ip
     });
 
     setCookie(cookieKey(courseId, Number(ses.sessionIdx)));
-    saveStudentHistory(studentNo, name);
+    saveStudentHistory(studentNo);
     okEl.textContent = `「${courses[courseId]?.name}」第${Number(ses.sessionIdx)+1}回の出席を登録しました`;
     okEl.classList.add("show");
     document.getElementById("stu-code").value = "";
@@ -966,25 +966,35 @@ async function submitAttendance() {
 }
 
 // ── 学生入力履歴（LocalStorage） ────────────────────────────────
-function saveStudentHistory(studentNo, name) {
-  try { localStorage.setItem("stu_no", studentNo); localStorage.setItem("stu_name", name); } catch(e) {}
+function saveStudentHistory(studentNo) {
+  try { localStorage.setItem("stu_no", studentNo); } catch(e) {}
 }
 function loadStudentHistory() {
   try {
-    const no   = localStorage.getItem("stu_no");
-    const name = localStorage.getItem("stu_name");
-    if (no)   document.getElementById("stu-no").value   = no;
-    if (name) document.getElementById("stu-name").value = name;
+    const no = localStorage.getItem("stu_no");
+    if (no) { document.getElementById("stu-no").value = no; onStuNoInput(); }
   } catch(e) {}
 }
 function clearStudentHistory() {
-  try { localStorage.removeItem("stu_no"); localStorage.removeItem("stu_name"); } catch(e) {}
-  document.getElementById("stu-no").value   = "";
-  document.getElementById("stu-name").value = "";
+  try { localStorage.removeItem("stu_no"); } catch(e) {}
+  document.getElementById("stu-no").value = "";
+  onStuNoInput();
 }
 function clearStuMsg() {
   document.getElementById("stu-err").classList.remove("show");
   document.getElementById("stu-ok").classList.remove("show");
+}
+function onStuNoInput() {
+  clearStuMsg();
+  const val = document.getElementById("stu-no").value.trim();
+  const box = document.getElementById("stu-no-confirm");
+  const valEl = document.getElementById("stu-no-confirm-val");
+  if (val) {
+    valEl.textContent = val;
+    box.style.display = "";
+  } else {
+    box.style.display = "none";
+  }
 }
 
 function updateRequiredHint() {
