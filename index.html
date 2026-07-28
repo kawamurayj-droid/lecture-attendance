@@ -834,12 +834,18 @@ function exportUPCSV() {
 
   const header = "\uFEFF授業コード,授業科目,学籍番号,実施日,時限,出欠区分";
   const body = rows.map(r => {
-    const d = new Date(r.time); // 学生が登録した日時を使用
-    const implDate = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+    // r.time が存在しない場合は今日の日付を使用
+    const d = r.time ? new Date(r.time) : new Date();
+    // Invalid Date のチェック
+    const isValid = !isNaN(d.getTime());
+    const implDate = isValid
+      ? `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`
+      : `${new Date().getFullYear()}/${new Date().getMonth()+1}/${new Date().getDate()}`;
     return `${courseCode},${course.name},${r.studentNo},${implDate},${period},0`;
   }).join("\n");
 
-  const csv = header + "\n" + body;
+  // 改行コードをLFに統一・末尾改行なし
+  const csv = (header + "\n" + body).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
   const a   = document.createElement("a");
   a.href    = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
   a.download = `UP出席_${course.name}_第${sessionSelIdx+1}回.csv`;
