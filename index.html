@@ -6,6 +6,7 @@
 <title>講義出席管理システム</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-database-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-auth-compat.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -111,12 +112,34 @@
 </head>
 <body>
 
+<!-- ログイン画面 -->
+<div id="login-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:40px 36px;max-width:360px;width:90%;text-align:center;box-shadow:0 4px 20px #0000001a">
+    <div style="font-size:36px;margin-bottom:12px">🎓</div>
+    <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px">Lecture Attendance</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:28px;letter-spacing:1px">リアルタイム出席管理システム</div>
+    <button onclick="loginWithGoogle()"
+      style="width:100%;padding:13px;background:#fff;border:1px solid var(--border);border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;color:#3c4043;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 1px 4px #0000001a;font-family:inherit">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" height="20">
+      NBUアカウントでログイン
+    </button>
+    <div style="font-size:11px;color:var(--muted);margin-top:16px">@nbu.ac.jp アカウントのみ利用可能</div>
+  </div>
+</div>
+
+<!-- アプリ本体（ログイン後のみ表示） -->
+<div id="app-screen" style="display:none">
+
 <header>
   <div>
     <h1>Lecture Attendance</h1>
     <p>リアルタイム出席管理システム</p>
   </div>
-  <button class="btn btn-ghost btn-sm" id="back-btn" onclick="goBack()" style="display:none">← 戻る</button>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+    <span id="login-user-name" style="font-size:11px;color:#c0c8ff"></span>
+    <button class="btn btn-ghost btn-sm" id="back-btn" onclick="goBack()" style="display:none">← 戻る</button>
+    <button class="btn btn-sm" onclick="logoutGoogle()" style="background:transparent;color:#ffffff88;border:1px solid #ffffff33;font-size:10px">ログアウト</button>
+  </div>
 </header>
 
 <div class="wrap">
@@ -302,14 +325,19 @@
 // ── Firebase 初期化 ──────────────────────────────────────────────
 firebase.initializeApp({
   apiKey:            "AIzaSyA8yv2AL8ppFebDYRDcwcXmcaLORvW1tmU",
+  authDomain:        "lecture-attendance-90b9c.firebaseapp.com",
   databaseURL:       "https://lecture-attendance-90b9c-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId:         "lecture-attendance-90b9c",
   messagingSenderId: "1074810980063",
   appId:             "1:1074810980063:web:c8c0280133354ccb618b6a",
 });
-const db = firebase.database();
+const db   = firebase.database();
+const auth = firebase.auth();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+googleProvider.setCustomParameters({ hd: "nbu.ac.jp" });
 
 // ── 状態 ─────────────────────────────────────────────────────────
+let currentUser  = null; // Googleログイン中のユーザー
 let courses      = {};
 let activeSes    = {};
 let allAttendance = {}; // 全出席データ（科目一覧の件数表示用）
@@ -320,23 +348,57 @@ let sessionSelIdx   = 0;
 let timerInterval   = null;
 let attUnsubscribe  = null;
 
-// ── Firebase 購読 ─────────────────────────────────────────────────
-db.ref("courses").on("value", snap => {
-  courses = snap.val() || {};
-  if (currentPage === "list")    renderCourseList();
-  if (currentPage === "student") renderStudentCourses();
-  if (currentPage === "session") renderSessionCourse();
+// ── Firebase 購読（ログイン後に開始） ────────────────────────────
+function startFirebaseListeners() {
+  db.ref("courses").on("value", snap => {
+    courses = snap.val() || {};
+    if (currentPage === "list")    renderCourseList();
+    if (currentPage === "student") renderStudentCourses();
+    if (currentPage === "session") renderSessionCourse();
+  });
+  db.ref("activeSessions").on("value", snap => {
+    activeSes = snap.val() || {};
+    if (currentPage === "session") renderSessionCode();
+    if (currentPage === "student") renderStudentStatus();
+    if (currentPage === "list")    renderCourseList();
+  });
+  db.ref("attendance").on("value", snap => {
+    allAttendance = snap.val() || {};
+    if (currentPage === "list") renderCourseList();
+  });
+}
+
+// ── Google ログイン制御 ────────────────────────────────────────
+auth.onAuthStateChanged(user => {
+  if (user && user.email && user.email.endsWith("@nbu.ac.jp")) {
+    currentUser = user;
+    document.getElementById("login-screen").style.display = "none";
+    document.getElementById("app-screen").style.display   = "block";
+    document.getElementById("login-user-name").textContent = user.displayName || user.email;
+    startFirebaseListeners();
+  } else {
+    if (user) auth.signOut(); // NBU以外のアカウントは即ログアウト
+    currentUser = null;
+    document.getElementById("login-screen").style.display = "block";
+    document.getElementById("app-screen").style.display   = "none";
+  }
 });
-db.ref("activeSessions").on("value", snap => {
-  activeSes = snap.val() || {};
-  if (currentPage === "session") renderSessionCode();
-  if (currentPage === "student") renderStudentStatus();
-  if (currentPage === "list")    renderCourseList();
-});
-db.ref("attendance").on("value", snap => {
-  allAttendance = snap.val() || {};
-  if (currentPage === "list") renderCourseList();
-});
+
+async function loginWithGoogle() {
+  try {
+    await auth.signInWithPopup(googleProvider);
+  } catch(e) {
+    alert("ログインに失敗しました。NBUのGoogleアカウントでお試しください。
+" + e.message);
+  }
+}
+
+async function logoutGoogle() {
+  if (!confirm("ログアウトしますか？")) return;
+  await auth.signOut();
+  currentTeacher = null;
+  showPage("home");
+}
 
 // ── ページ遷移 ────────────────────────────────────────────────────
 function showPage(name, extra) {
@@ -1015,5 +1077,6 @@ function checkMyHistory() {
   }).join("");
 }
 </script>
+</div><!-- /app-screen -->
 </body>
 </html>
