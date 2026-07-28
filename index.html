@@ -6,7 +6,6 @@
 <title>講義出席管理システム</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-database-compat.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-auth-compat.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -117,30 +116,13 @@
     <h1>Lecture Attendance</h1>
     <p>リアルタイム出席管理システム</p>
   </div>
-  <div class="flex-row" style="gap:8px">
-    <button class="btn btn-sm" id="header-logout-btn" onclick="logoutStudent()" style="display:none;font-weight:700;background:var(--red);color:#fff;border:1px solid var(--red)">🔓 ログアウト</button>
-    <button class="btn btn-ghost btn-sm" id="back-btn" onclick="goBack()" style="display:none">← 戻る</button>
-  </div>
+  <button class="btn btn-ghost btn-sm" id="back-btn" onclick="goBack()" style="display:none">← 戻る</button>
 </header>
 
 <div class="wrap">
 
-  <!-- ⓪ Googleログイン関門（最初に必ず通過） -->
-  <div class="page active" id="page-gate" style="max-width:400px;margin:0 auto">
-    <div class="card">
-      <p class="sec">本人確認</p>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
-        利用の前に、NBUのGoogleアカウントでログインしてください。
-      </p>
-      <button class="btn btn-pri btn-full" onclick="loginWithGoogle()">Googleでログイン</button>
-    </div>
-  </div>
-
   <!-- ① ホーム -->
-  <div class="page" id="page-home">
-    <div style="background:#ff6b6b15;border:2px solid var(--red);border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:13px;color:var(--red);font-weight:700;line-height:1.6;text-align:center">
-      ⚠️ 共有のパソコンで利用した場合は、使い終わったら必ず右上の「🔓 ログアウト」を押してください。
-    </div>
+  <div class="page active" id="page-home">
     <p style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px">モードを選択してください</p>
     <div class="mode-grid">
       <button class="mode-btn" onclick="showPage('student')">
@@ -288,52 +270,25 @@
   <!-- ⑥ 学生（出席登録） -->
   <div class="page" id="page-student" style="max-width:480px;margin:0 auto">
     <div class="card">
+      <p class="sec">出席登録</p>
       <div class="alert alert-err" id="stu-err"></div>
       <div class="alert alert-ok"  id="stu-ok"></div>
-
-      <!-- ステップ1：科目選択＋学籍番号入力 -->
-      <div id="stu-step1">
-        <p class="sec">出席登録　①科目・学籍番号</p>
-        <div class="field"><label class="lbl">科目選択</label>
-          <select id="stu-course" onchange="onCourseSelect()">
-            <option value="">-- 科目を選択 --</option>
-          </select>
-        </div>
-        <div class="alert alert-info show" id="stu-status" style="margin-bottom:12px"></div>
-        <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001" oninput="clearStuMsg()"></div>
-        <div style="text-align:right;margin-top:-8px;margin-bottom:8px">
-          <button type="button" onclick="clearStudentHistory()" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;text-decoration:underline">入力履歴をクリア</button>
-        </div>
-        <button class="btn btn-pri btn-full" onclick="goToConfirm()">次へ（確認画面）</button>
+      <div class="field"><label class="lbl">科目選択</label>
+        <select id="stu-course" onchange="onCourseSelect()">
+          <option value="">-- 科目を選択 --</option>
+        </select>
       </div>
-
-      <!-- ステップ2：学籍番号の確認 -->
-      <div id="stu-step2" style="display:none">
-        <p class="sec">出席登録　②学籍番号の確認</p>
-        <div class="code-box" style="margin-bottom:16px">
-          <div class="code-sub" style="margin-top:0;margin-bottom:8px">入力された学籍番号</div>
-          <div class="code-big" id="stu-confirm-no" style="font-size:36px;letter-spacing:4px">--------</div>
-        </div>
-        <p style="text-align:center;font-size:13px;color:var(--muted);margin-bottom:16px">この番号で間違いありませんか？</p>
-        <div class="flex-row">
-          <button class="btn btn-sec" style="flex:1;justify-content:center" onclick="backToStep1()">修正する</button>
-          <button class="btn btn-succ" style="flex:1;justify-content:center" onclick="goToStep3()">間違いありません</button>
-        </div>
+      <div class="alert alert-info show" id="stu-status" style="margin-bottom:12px"></div>
+      <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001" oninput="clearStuMsg()"></div>
+      <div class="field"><label class="lbl">氏名</label><input id="stu-name" placeholder="例：山田 花子" oninput="clearStuMsg()"></div>
+      <div style="text-align:right;margin-top:-8px;margin-bottom:8px">
+        <button type="button" onclick="clearStudentHistory()" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;text-decoration:underline">入力履歴をクリア</button>
       </div>
-
-      <!-- ステップ3：出席コード入力＋登録 -->
-      <div id="stu-step3" style="display:none">
-        <p class="sec">出席登録　③出席コード入力</p>
-        <div class="alert alert-info show" style="margin-bottom:14px">
-          学籍番号：<b id="stu-step3-no" style="letter-spacing:2px"></b>
-          <button type="button" onclick="backToStep1()" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer;font-family:inherit;text-decoration:underline;margin-left:8px">変更する</button>
-        </div>
-        <div class="field"><label class="lbl">出席コード（4桁）</label>
-          <input id="stu-code" maxlength="4" placeholder="0000" class="pin-input"
-            onkeydown="if(event.key==='Enter')submitAttendance()">
-        </div>
-        <button class="btn btn-pri btn-full" onclick="submitAttendance()">出席登録</button>
+      <div class="field"><label class="lbl">出席コード（4桁）</label>
+        <input id="stu-code" maxlength="4" placeholder="0000" class="pin-input"
+          onkeydown="if(event.key==='Enter')submitAttendance()">
       </div>
+      <button class="btn btn-pri btn-full" onclick="submitAttendance()">出席登録</button>
     </div>
     <div class="card" id="active-courses-card" style="display:none">
       <p class="sec">現在受付中の科目</p>
@@ -347,7 +302,6 @@
 // ── Firebase 初期化 ──────────────────────────────────────────────
 firebase.initializeApp({
   apiKey:            "AIzaSyA8yv2AL8ppFebDYRDcwcXmcaLORvW1tmU",
-  authDomain:        "lecture-attendance-90b9c.firebaseapp.com",
   databaseURL:       "https://lecture-attendance-90b9c-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId:         "lecture-attendance-90b9c",
   messagingSenderId: "1074810980063",
@@ -355,74 +309,34 @@ firebase.initializeApp({
 });
 const db = firebase.database();
 
-// ── Google認証 ─────────────────────────────────────────────────
-const auth = firebase.auth();
-const googleProvider = new firebase.auth.GoogleAuthProvider();
-googleProvider.setCustomParameters({ hd: "nbu.ac.jp" }); // NBUドメインを候補に絞る
-let currentUser = null; // ログイン済みならFirebaseのuser情報が入る
-let listenersAttached = false;
-
-auth.onAuthStateChanged(user => {
-  const logoutBtn = document.getElementById("header-logout-btn");
-  if (user && user.email && user.email.endsWith("@nbu.ac.jp")) {
-    currentUser = user;
-    logoutBtn.style.display = "";
-    if (!listenersAttached) { attachDataListeners(); listenersAttached = true; }
-    showPage("home");
-  } else {
-    currentUser = null;
-    if (user) auth.signOut(); // NBU以外のアカウントは強制サインアウト
-    logoutBtn.style.display = "none";
-    showPage("gate");
-  }
-});
-
-async function loginWithGoogle() {
-  try {
-    const result = await auth.signInWithPopup(googleProvider);
-    if (!result.user.email.endsWith("@nbu.ac.jp")) {
-      await auth.signOut();
-      alert("NBUのGoogleアカウントでログインしてください");
-    }
-  } catch (e) {
-    alert("ログインに失敗しました: " + e.message);
-  }
-}
-
-async function logoutStudent() {
-  await auth.signOut();
-}
-
 // ── 状態 ─────────────────────────────────────────────────────────
 let courses      = {};
 let activeSes    = {};
 let allAttendance = {}; // 全出席データ（科目一覧の件数表示用）
-let currentPage  = "gate";
+let currentPage  = "home";
 let prevPage     = "home";
 let sessionCourseId = null;
 let sessionSelIdx   = 0;
 let timerInterval   = null;
 let attUnsubscribe  = null;
 
-// ── Firebase 購読（ログイン確認後に一度だけ開始） ──────────────────
-function attachDataListeners() {
-  db.ref("courses").on("value", snap => {
-    courses = snap.val() || {};
-    if (currentPage === "list")    renderCourseList();
-    if (currentPage === "student") renderStudentCourses();
-    if (currentPage === "session") renderSessionCourse();
-  });
-  db.ref("activeSessions").on("value", snap => {
-    activeSes = snap.val() || {};
-    if (currentPage === "session") renderSessionCode();
-    if (currentPage === "student") renderStudentStatus();
-    if (currentPage === "list")    renderCourseList();
-  });
-  db.ref("attendance").on("value", snap => {
-    allAttendance = snap.val() || {};
-    if (currentPage === "list") renderCourseList();
-  });
-}
+// ── Firebase 購読 ─────────────────────────────────────────────────
+db.ref("courses").on("value", snap => {
+  courses = snap.val() || {};
+  if (currentPage === "list")    renderCourseList();
+  if (currentPage === "student") renderStudentCourses();
+  if (currentPage === "session") renderSessionCourse();
+});
+db.ref("activeSessions").on("value", snap => {
+  activeSes = snap.val() || {};
+  if (currentPage === "session") renderSessionCode();
+  if (currentPage === "student") renderStudentStatus();
+  if (currentPage === "list")    renderCourseList();
+});
+db.ref("attendance").on("value", snap => {
+  allAttendance = snap.val() || {};
+  if (currentPage === "list") renderCourseList();
+});
 
 // ── ページ遷移 ────────────────────────────────────────────────────
 function showPage(name, extra) {
@@ -430,7 +344,7 @@ function showPage(name, extra) {
   currentPage = name;
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
   document.getElementById("page-" + name).classList.add("active");
-  document.getElementById("back-btn").style.display = (name === "home" || name === "gate") ? "none" : "";
+  document.getElementById("back-btn").style.display = name === "home" ? "none" : "";
 
   if (name === "list")    renderCourseList();
   if (name === "edit")    openEdit(extra);
@@ -774,7 +688,7 @@ function renderAttendance(allData) {
     const studentMap = {};
     Object.entries(allData).forEach(([idx, sd]) => {
       Object.values(sd).forEach(r => {
-        if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { count: 0 };
+        if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { name: r.name, count: 0 };
         studentMap[r.studentNo].count++;
       });
     });
@@ -782,7 +696,7 @@ function renderAttendance(allData) {
     warningEl.innerHTML = atRisk.length
       ? `<div style="padding:10px 14px;background:#ff6b6b11;border:1px solid #ff6b6b33;border-radius:8px;margin-bottom:12px;font-size:12px;color:var(--red)">
           ⚠️ 認定ライン（${required}回）未達：${atRisk.length}名
-          <span style="color:var(--muted);margin-left:8px">${atRisk.map(([no])=>no).join("・")}</span>
+          <span style="color:var(--muted);margin-left:8px">${atRisk.map(([,s])=>s.name).join("・")}</span>
         </div>`
       : `<div style="padding:10px 14px;background:#2ecc7111;border:1px solid #2ecc7133;border-radius:8px;margin-bottom:12px;font-size:12px;color:var(--green)">
           ✅ 全員が認定ライン（${required}回）を達成しています
@@ -799,9 +713,10 @@ function renderAttendance(allData) {
   }
   document.getElementById("att-body").innerHTML = `
     <table>
-      <thead><tr><th>学籍番号</th><th>登録時刻</th><th>IPアドレス</th><th></th></tr></thead>
+      <thead><tr><th>学籍番号</th><th>氏名</th><th>登録時刻</th><th>IPアドレス</th><th></th></tr></thead>
       <tbody>${records.map(([rid, r]) => `<tr>
         <td>${esc(r.studentNo)}</td>
+        <td>${esc(r.name)}</td>
         <td>${fmtTime(r.time)}</td>
         <td style="font-size:11px;color:var(--muted)">${esc(r.ip||"―")}</td>
         <td><button class="btn btn-del btn-sm" onclick="deleteRecord('${rid}')">削除</button></td>
@@ -816,7 +731,7 @@ async function deleteRecord(rid) {
 
 function exportCSV() {
   const rows = window._lastRecords || [];
-  const csv  = "\uFEFF学籍番号,登録時刻,IPアドレス\n" + rows.map(r => `${r.studentNo},${fmtTime(r.time)},${r.ip||""}`).join("\n");
+  const csv  = "\uFEFF学籍番号,氏名,登録時刻,IPアドレス\n" + rows.map(r => `${r.studentNo},${r.name},${fmtTime(r.time)},${r.ip||""}`).join("\n");
   const a    = document.createElement("a");
   a.href     = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
   a.download = `出席_第${sessionSelIdx+1}回.csv`;
@@ -832,14 +747,15 @@ function exportUPCSV() {
   const courseCode = course.courseCode || "";
   const period      = course.period || "";
 
-  const header = "\uFEFF授業コード,授業科目,学籍番号,実施日,時限,出欠区分";
+  const header = "\uFEFF授業コード,授業科目,学籍番号,氏名,学生氏名＿カナ,学生氏名＿英語,実施日,時限,出欠区分";
   const body = rows.map(r => {
-    const d = new Date(r.time); // 学生が登録した日時を使用
+    const d = new Date(r.time);
     const implDate = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
-    return `${courseCode},${course.name},${r.studentNo},${implDate},${period},0`;
+    return `${courseCode},${course.name},${r.studentNo},${r.name},,,${implDate},${period},0`;
   }).join("\n");
 
-  const csv = header + "\n" + body;
+  // 改行コードをLFに統一（CRLFが混入しないように）・末尾改行なし
+  const csv = (header + "\n" + body).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
   const a   = document.createElement("a");
   a.href    = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
   a.download = `UP出席_${course.name}_第${sessionSelIdx+1}回.csv`;
@@ -853,19 +769,19 @@ function exportRateCSV() {
   const total    = course.sessions;
 
   // 全学生を収集
-  const studentMap = {}; // { studentNo: { attended: Set } }
+  const studentMap = {}; // { studentNo: { name, counts: Set } }
   Object.entries(allData).forEach(([idx, sessionData]) => {
     Object.values(sessionData).forEach(r => {
-      if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { attended: new Set() };
+      if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { name: r.name, attended: new Set() };
       studentMap[r.studentNo].attended.add(Number(idx));
     });
   });
 
-  // ヘッダー行：学籍番号,出席回数,総回数,出席率,第1回,第2回,...
+  // ヘッダー行：学籍番号,氏名,出席回数,総回数,出席率,第1回,第2回,...
   const required     = course.requiredSessions || null;
   const roundHeaders = Array.from({length: total}, (_, i) => `第${i+1}回`).join(",");
   const certCol      = required ? ",認定" : "";
-  const header       = `\uFEFF学籍番号,出席回数,総回数,出席率${certCol},${roundHeaders}`;
+  const header       = `\uFEFF学籍番号,氏名,出席回数,総回数,出席率${certCol},${roundHeaders}`;
 
   // データ行
   const rows = Object.entries(studentMap)
@@ -876,7 +792,7 @@ function exportRateCSV() {
       const cert    = required ? (count >= required ? "○" : "×") : "";
       const certVal = required ? `,${cert}` : "";
       const rounds  = Array.from({length: total}, (_, i) => s.attended.has(i) ? "○" : "―").join(",");
-      return `${no},${count},${total},${rate}%${certVal},${rounds}`;
+      return `${no},${s.name},${count},${total},${rate}%${certVal},${rounds}`;
     });
 
   const csv = header + "\n" + rows.join("\n");
@@ -927,6 +843,7 @@ function onCourseSelect() {
 async function submitAttendance() {
   const courseId  = document.getElementById("stu-course").value;
   const studentNo = document.getElementById("stu-no").value.trim();
+  const name      = document.getElementById("stu-name").value.trim();
   const code      = document.getElementById("stu-code").value.trim();
   const errEl     = document.getElementById("stu-err");
   const okEl      = document.getElementById("stu-ok");
@@ -934,7 +851,7 @@ async function submitAttendance() {
 
   const showErr = msg => { errEl.textContent=msg; errEl.classList.add("show"); };
 
-  if (!courseId || !studentNo || !code) { showErr("すべての項目を入力してください"); return; }
+  if (!courseId || !studentNo || !name || !code) { showErr("すべての項目を入力してください"); return; }
   const ses = activeSes[courseId];
   if (!ses)               { showErr("この科目は現在受付中ではありません"); return; }
   if (ses.code !== code)  { showErr("出席コードが違います"); return; }
@@ -963,7 +880,7 @@ async function submitAttendance() {
         alreadyExists = true;
         return; // undefinedを返すとabort（書き込まない）
       }
-      return { time: new Date().toISOString(), ip };
+      return { name, time: new Date().toISOString(), ip };
     });
 
     if (alreadyExists) {
@@ -972,59 +889,33 @@ async function submitAttendance() {
 
     // 本データも保存（一覧表示・CSV用）
     await db.ref(`attendance/${courseId}/${Number(ses.sessionIdx)}`).push({
-      studentNo, time: new Date().toISOString(), ip
+      studentNo, name, time: new Date().toISOString(), ip
     });
 
     setCookie(cookieKey(courseId, Number(ses.sessionIdx)));
-    saveStudentHistory(studentNo);
+    saveStudentHistory(studentNo, name);
     okEl.textContent = `「${courses[courseId]?.name}」第${Number(ses.sessionIdx)+1}回の出席を登録しました`;
     okEl.classList.add("show");
     document.getElementById("stu-code").value = "";
-    document.getElementById("stu-no").value = "";
-    showStuStep(1);
   } catch(e) { showErr("登録に失敗しました: " + e.message); }
 }
 
-// ── ステップ切り替え（学籍番号の確認画面をはさむ） ──────────────────
-function showStuStep(n) {
-  document.getElementById("stu-step1").style.display = n === 1 ? "" : "none";
-  document.getElementById("stu-step2").style.display = n === 2 ? "" : "none";
-  document.getElementById("stu-step3").style.display = n === 3 ? "" : "none";
-}
-function goToConfirm() {
-  clearStuMsg();
-  const courseId  = document.getElementById("stu-course").value;
-  const studentNo = document.getElementById("stu-no").value.trim();
-  const errEl = document.getElementById("stu-err");
-  if (!courseId)  { errEl.textContent = "科目を選択してください";     errEl.classList.add("show"); return; }
-  if (!studentNo) { errEl.textContent = "学籍番号を入力してください"; errEl.classList.add("show"); return; }
-  document.getElementById("stu-confirm-no").textContent = studentNo;
-  showStuStep(2);
-}
-function backToStep1() {
-  showStuStep(1);
-}
-function goToStep3() {
-  const studentNo = document.getElementById("stu-no").value.trim();
-  document.getElementById("stu-step3-no").textContent = studentNo;
-  showStuStep(3);
-  setTimeout(() => document.getElementById("stu-code").focus(), 100);
-}
-
 // ── 学生入力履歴（LocalStorage） ────────────────────────────────
-function saveStudentHistory(studentNo) {
-  try { localStorage.setItem("stu_no", studentNo); } catch(e) {}
+function saveStudentHistory(studentNo, name) {
+  try { localStorage.setItem("stu_no", studentNo); localStorage.setItem("stu_name", name); } catch(e) {}
 }
 function loadStudentHistory() {
   try {
-    const no = localStorage.getItem("stu_no");
-    if (no) document.getElementById("stu-no").value = no;
+    const no   = localStorage.getItem("stu_no");
+    const name = localStorage.getItem("stu_name");
+    if (no)   document.getElementById("stu-no").value   = no;
+    if (name) document.getElementById("stu-name").value = name;
   } catch(e) {}
-  showStuStep(1);
 }
 function clearStudentHistory() {
-  try { localStorage.removeItem("stu_no"); } catch(e) {}
-  document.getElementById("stu-no").value = "";
+  try { localStorage.removeItem("stu_no"); localStorage.removeItem("stu_name"); } catch(e) {}
+  document.getElementById("stu-no").value   = "";
+  document.getElementById("stu-name").value = "";
 }
 function clearStuMsg() {
   document.getElementById("stu-err").classList.remove("show");
