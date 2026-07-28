@@ -265,6 +265,7 @@
         <div style="margin-left:auto;display:flex;gap:6px">
           <button class="btn btn-ghost btn-sm" id="rate-btn" onclick="exportRateCSV()" style="display:none">出席率CSV</button>
           <button class="btn btn-ghost btn-sm" id="csv-btn"  onclick="exportCSV()"     style="display:none">回別CSV</button>
+          <button class="btn btn-pri btn-sm"   id="up-btn"   onclick="exportUPCSV()"   style="display:none">UPシステム用CSV</button>
 
         </div>
       </div>
@@ -754,6 +755,7 @@ function renderAttendance(allData) {
   const records = allData[sessionSelIdx] ? Object.entries(allData[sessionSelIdx]) : [];
   document.getElementById("att-count").textContent = records.length + "名";
   document.getElementById("csv-btn").style.display  = records.length ? "" : "none";
+  document.getElementById("up-btn").style.display   = records.length ? "" : "none";
 
   // 出席率CSV：全回にデータがあれば表示
   const totalAtt = Object.keys(allData).length;
@@ -822,6 +824,34 @@ function exportCSV() {
   a.click();
 }
 
+
+function exportUPCSV() {
+  const rows   = window._lastRecords || [];
+  const course = courses[sessionCourseId];
+  if (!course) return;
+  if (rows.length === 0) { alert("この回の出席者がいません"); return; }
+
+  const courseCode = course.courseCode || "";
+  const period     = course.period     || "";
+
+  // ヘッダー：UPシステムの仕様に合わせた列名・囲みなし
+  const header = "\uFEFF授業コード,授業科目,学籍番号,氏名,学生氏名＿カナ,学生氏名＿英語,実施日,時限,出欠区分";
+
+  const body = rows.map(r => {
+    const d = r.time ? new Date(r.time) : new Date();
+    const isValid = !isNaN(d.getTime());
+    const dd = isValid ? d : new Date();
+    const implDate = `${dd.getFullYear()}/${dd.getMonth()+1}/${dd.getDate()}`;
+    return `${courseCode},${course.name},${r.studentNo},,,,${implDate},${period},0`;
+  });
+
+  // 改行コードはLF・末尾改行なし
+  const csv = [header, ...body].join("\n").trimEnd();
+  const a   = document.createElement("a");
+  a.href    = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
+  a.download = `UP出席_${course.name}_第${sessionSelIdx+1}回.csv`;
+  a.click();
+}
 
 function exportRateCSV() {
   const allData  = window._lastAllData || {};
