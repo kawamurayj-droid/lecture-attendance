@@ -832,7 +832,7 @@ function exportUPCSV() {
   const courseCode = course.courseCode || "";
   const period      = course.period || "";
 
-  const header = "\uFEFF授業コード,授業科目,学籍番号,実施日,時限,出欠区分";
+  const header = "授業コード,授業科目,学籍番号,実施日,時限,出欠区分";
   const body = rows.map(r => {
     const d = r.time ? new Date(r.time) : new Date();
     const isValid = !isNaN(d.getTime());
