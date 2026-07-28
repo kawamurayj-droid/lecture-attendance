@@ -3,1080 +3,910 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>講義出席管理システム</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-database-compat.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-auth-compat.min.js"></script>
+<title>意見交換アプリ</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg:      #f4f6fb;
-    --bg2:     #ffffff;
-    --bg3:     #f0f2f8;
-    --border:  #dde1ee;
-    --text:    #1a1d2e;
-    --muted:   #7a7f99;
-    --sub:     #4a4f6a;
-    --accent:  #4f5bd5;
-    --green:   #19a85a;
-    --red:     #e03c3c;
-    --yellow:  #c97a00;
+    --bg: #f7f5f2;
+    --ink: #2b2a28;
+    --accent: #b5573e;
+    --accent-soft: #f1ddd5;
+    --line: #ddd6cd;
+    --card-bg: #ffffff;
+    --muted: #79746c;
+    --ok: #4a7a4a;
   }
-  body { background: var(--bg); color: var(--text); font-family: 'DM Mono','Courier New',monospace; min-height: 100vh; }
-
-  /* ── header ── */
-  header { background: #fff; border-bottom: 2px solid var(--accent); padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
-  header h1 { font-size: 14px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); }
-  header p  { font-size: 11px; color: var(--muted); letter-spacing: 1px; margin-top: 2px; }
-  #back-btn { margin-left: auto; }
-
-  /* ── layout ── */
-  .wrap { max-width: 860px; margin: 0 auto; padding: 28px 16px; }
-
-  /* ── card ── */
-  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 4px #0000000a; }
-  .sec  { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
-
-  /* ── buttons ── */
-  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; font-family: inherit; transition: opacity .15s; }
-  .btn:hover { opacity: .85; }
-  .btn-pri   { background: var(--accent); color: #fff; }
-  .btn-succ  { background: var(--green);  color: #fff; }
-  .btn-sec   { background: var(--bg3); color: var(--sub); border: 1px solid var(--border); }
-  .btn-ghost { background: transparent; color: var(--accent); border: 1px solid #4f5bd555; }
-  .btn-del   { background: transparent; color: var(--red);    border: 1px solid #e03c3c55; }
-  .btn-sm    { padding: 5px 12px; font-size: 10px; }
-  .btn-full  { width: 100%; justify-content: center; padding: 13px; }
-
-  /* ── form ── */
-  label.lbl { display: block; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
-  input, select { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px 13px; font-size: 13px; font-family: inherit; outline: none; margin-bottom: 13px; box-shadow: inset 0 1px 3px #0000000a; }
-  input:focus, select:focus { border-color: var(--accent); }
-  .field { margin-bottom: 4px; }
-
-  /* ── alert ── */
-  .alert { padding: 11px 15px; border-radius: 8px; font-size: 12px; margin-bottom: 12px; display: none; }
-  .alert.show { display: block; }
-  .alert-err  { background: #ff6b6b11; border: 1px solid #ff6b6b44; color: var(--red); }
-  .alert-ok   { background: #2ecc7111; border: 1px solid #2ecc7144; color: var(--green); }
-  .alert-info { background: #7c85ff11; border: 1px solid #7c85ff44; color: var(--accent); }
-
-  /* ── tag ── */
-  .tag { display: inline-block; padding: 2px 9px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 1px; }
-  .tag-purple { background: #7c85ff22; color: var(--accent); border: 1px solid #7c85ff33; }
-  .tag-green  { background: #2ecc7122; color: var(--green);  border: 1px solid #2ecc7133; }
-  .tag-yellow { background: #f39c1222; color: var(--yellow); border: 1px solid #f39c1233; }
-  .tag-red    { background: #ff6b6b22; color: var(--red);    border: 1px solid #ff6b6b33; }
-
-  /* ── mode select ── */
-  .mode-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 12px; }
-  @media (max-width: 560px) { .mode-grid { grid-template-columns: 1fr; } }
-  .mode-btn  { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 28px 16px; text-align: center; cursor: pointer; font-family: inherit; color: var(--muted); transition: all .2s; box-shadow: 0 1px 4px #0000000a; }
-  .mode-btn:hover { border-color: var(--accent); color: var(--accent); background: #f0f2ff; }
-  .mode-btn .icon { font-size: 30px; margin-bottom: 10px; }
-  .mode-btn .label { font-size: 13px; font-weight: 700; letter-spacing: 2px; }
-  .mode-btn .sub   { font-size: 10px; margin-top: 5px; letter-spacing: 1px; }
-
-  /* ── course list ── */
-  .course-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 12px; box-shadow: 0 1px 4px #0000000a; }
-  .course-name { font-size: 15px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
-  .course-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-  .course-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-  /* ── session ── */
-  .session-tabs { display: flex; flex-wrap: wrap; gap: 7px; }
-  .session-tab  { padding: 7px 14px; border-radius: 7px; border: none; cursor: pointer; font-size: 11px; font-weight: 700; font-family: inherit; }
-  .session-tab.active   { background: var(--accent); color: #fff; }
-  .session-tab.inactive { background: var(--bg3); color: var(--sub); border: 1px solid var(--border); }
-
-  /* ── code display ── */
-  .code-box  { background: #f0f2ff; border: 1px solid #c0c8ff; border-radius: 12px; padding: 22px; text-align: center; }
-  .code-big  { font-size: 54px; font-weight: 700; letter-spacing: 12px; color: var(--accent); line-height: 1; }
-  .code-sub  { font-size: 11px; color: var(--muted); margin-top: 10px; letter-spacing: 1px; }
-  .timer-bar { height: 3px; border-radius: 2px; margin-top: 10px; background: #dde1ee; }
-  .timer-fill{ height: 100%; border-radius: 2px; background: var(--accent); transition: width 1s linear; }
-
-  /* ── table ── */
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th    { text-align: left; padding: 9px 11px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
-  td    { padding: 9px 11px; border-bottom: 1px solid #1e2133; color: var(--sub); }
-
-  /* ── pin ── */
-  .pin-input { letter-spacing: 8px; font-size: 22px; text-align: center; }
-
-  /* ── hidden ── */
-  .page { display: none; }
-  .page.active { display: block; }
-  .flex-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+  }
+  .wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+  }
+  .wrap.admin-wrap { max-width: 760px; }
+  header {
+    padding: 28px 0 18px;
+    border-bottom: 2px solid var(--ink);
+    margin-bottom: 24px;
+  }
+  header h1 {
+    font-size: 1.4rem;
+    margin: 0 0 4px;
+    letter-spacing: 0.02em;
+  }
+  header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 22px;
+    margin-bottom: 18px;
+  }
+  .card h2 {
+    font-size: 1.05rem;
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .badge {
+    display: inline-block;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+  }
+  label {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  input[type="text"], input[type="password"], textarea, select {
+    width: 100%;
+    font-size: 1rem;
+    padding: 11px 12px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #fdfcfb;
+    font-family: inherit;
+    color: var(--ink);
+  }
+  textarea { resize: vertical; min-height: 90px; }
+  input:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  button {
+    background: var(--ink);
+    color: #fff;
+    border: none;
+    border-radius: 7px;
+    padding: 12px 22px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  button:hover { background: var(--accent); }
+  button:disabled { background: #c9c4bc; cursor: not-allowed; }
+  button.secondary {
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--line);
+  }
+  button.secondary:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  button.danger { background: #8a3b2a; }
+  button.danger:hover { background: #b5573e; }
+  .opinion-block {
+    border-left: 3px solid var(--accent);
+    padding: 12px 14px;
+    background: #fbf7f4;
+    border-radius: 0 7px 7px 0;
+    margin-bottom: 12px;
+    font-size: 0.96rem;
+  }
+  .comment-author {
+    text-align: right;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+  .status-msg {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 10px;
+  }
+  .done-mark {
+    color: #4a7a4a;
+    font-weight: 600;
+  }
+  .hidden { display: none !important; }
+  .field-row { margin-bottom: 16px; }
+  .small-note { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; }
+  .stat { display:flex; gap:20px; flex-wrap:wrap; margin-top:8px; }
+  .stat-box { background: var(--accent-soft); border-radius: 8px; padding: 12px 18px; min-width:120px; }
+  .stat-box .num { font-size:1.6rem; font-weight:700; color: var(--accent); }
+  .stat-box .label { font-size:0.75rem; color: var(--muted); }
+  .badge-status { display:inline-block; font-size:0.72rem; font-weight:700; padding:2px 9px; border-radius:999px; }
+  .badge-open { background:#e3eede; color:#4a7a4a; }
+  .badge-distributed { background:#dde6ee; color:#3a6a9a; }
+  .badge-closed { background:#e8e6e2; color:#79746c; }
+  .theme-item { padding:10px 0; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+  #admin-log { font-size: 0.82rem; color: var(--muted); margin-top: 10px; white-space: pre-wrap; }
+  .footer-link { text-align:center; margin-top: 28px; }
+  .footer-link a { font-size: 0.78rem; color: var(--muted); text-decoration: underline; cursor: pointer; }
 </style>
 </head>
 <body>
 
-<!-- ログイン画面 -->
-<div id="login-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)">
-  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:40px 36px;max-width:360px;width:90%;text-align:center;box-shadow:0 4px 20px #0000001a">
-    <div style="font-size:36px;margin-bottom:12px">🎓</div>
-    <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px">Lecture Attendance</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:28px;letter-spacing:1px">リアルタイム出席管理システム</div>
-    <button onclick="loginWithGoogle()"
-      style="width:100%;padding:13px;background:#fff;border:1px solid var(--border);border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;color:#3c4043;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 1px 4px #0000001a;font-family:inherit">
-      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" height="20">
-      NBUアカウントでログイン
-    </button>
-    <div style="font-size:11px;color:var(--muted);margin-top:16px">@nbu.ac.jp アカウントのみ利用可能</div>
+<!-- ============ Googleログイン関門（最初に必ず通過） ============ -->
+<div class="wrap" id="gate-app" style="max-width:420px">
+  <header>
+    <h1>意見交換アプリ</h1>
+    <p>本人確認</p>
+  </header>
+  <div class="card">
+    <p style="color:var(--muted); font-size:0.9rem; margin-bottom:16px;">ご利用の前に、NBUのGoogleアカウントでログインしてください。</p>
+    <button id="gate-login-btn">Googleでログイン</button>
   </div>
 </div>
 
-<!-- アプリ本体（ログイン後のみ表示） -->
-<div id="app-screen" style="display:none">
+<!-- ============ 学生用画面 ============ -->
+<div class="wrap hidden" id="student-app">
+  <header>
+    <h1>意見交換アプリ</h1>
+    <p id="theme-title-sub">テーマを読み込み中…</p>
+    <div class="footer-link" style="margin-top:8px"><a id="student-logout-link">ログアウト</a></div>
+  </header>
 
-<header>
-  <div>
-    <h1>Lecture Attendance</h1>
-    <p>リアルタイム出席管理システム</p>
-  </div>
-  <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
-    <span id="login-user-name" style="font-size:11px;color:#c0c8ff"></span>
-    <button class="btn btn-ghost btn-sm" id="back-btn" onclick="goBack()" style="display:none">← 戻る</button>
-    <button class="btn btn-sm" onclick="logoutGoogle()" style="background:transparent;color:#ffffff88;border:1px solid #ffffff33;font-size:10px">ログアウト</button>
-  </div>
-</header>
-
-<div class="wrap">
-
-  <!-- ① ホーム -->
-  <div class="page active" id="page-home">
-    <p style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px">モードを選択してください</p>
-    <div class="mode-grid">
-      <button class="mode-btn" onclick="showPage('student')">
-        <div class="icon">🎓</div>
-        <div class="label">出席登録</div>
-        <div class="sub">STUDENT</div>
-      </button>
-      <button class="mode-btn" onclick="showPage('mycheck')">
-        <div class="icon">🔍</div>
-        <div class="label">登録履歴確認</div>
-        <div class="sub">CHECK</div>
-      </button>
-      <button class="mode-btn" onclick="showPage('pin')">
-        <div class="icon">📋</div>
-        <div class="label">教員管理</div>
-        <div class="sub">INSTRUCTOR</div>
-      </button>
+  <!-- ログイン -->
+  <div class="card" id="login-card">
+    <h2>① はじめに学籍番号・氏名を入力</h2>
+    <div class="field-row">
+      <label for="student-id">学籍番号</label>
+      <input type="text" id="student-id" placeholder="例：1234567" autocomplete="off">
     </div>
+    <div class="row" style="margin-top:-4px; margin-bottom:16px;">
+      <div style="flex:1;">
+        <label for="student-family-name">姓</label>
+        <input type="text" id="student-family-name" placeholder="例：山田" autocomplete="off">
+      </div>
+      <div style="flex:1;">
+        <label for="student-given-name">名</label>
+        <input type="text" id="student-given-name" placeholder="例：太郎" autocomplete="off">
+      </div>
+    </div>
+    <button id="login-btn">はじめる</button>
   </div>
 
-  <!-- ② PIN -->
-  <div class="page" id="page-pin" style="max-width:340px;margin:0 auto">
-    <div class="card">
-      <p class="sec">教員認証</p>
-      <div class="alert alert-err" id="pin-err"></div>
-      <div class="field"><label class="lbl">PINコード</label>
-        <input type="password" class="pin-input" id="pin-input" maxlength="4" placeholder="• • • •"
-          oninput="pinErr()" onkeydown="if(event.key==='Enter')checkPin()">
-      </div>
-      <button class="btn btn-pri btn-full" onclick="checkPin()">認証</button>
+  <!-- 意見投稿 -->
+  <div class="card hidden" id="opinion-card">
+    <h2><span class="badge">STEP 1</span>意見を提出する</h2>
+    <p id="theme-text-display" style="color:var(--muted); font-size:0.9rem;"></p>
+    <div class="field-row">
+      <textarea id="opinion-text" placeholder="あなたの考えを入力してください"></textarea>
     </div>
+    <button id="submit-opinion-btn">提出する</button>
+    <p class="status-msg" id="opinion-status"></p>
   </div>
 
-  <!-- ③ 科目一覧（教員） -->
-  <div class="page" id="page-list">
-    <div class="flex-row" style="margin-bottom:18px">
-      <p class="sec" style="margin:0">科目一覧</p>
-      <span id="teacher-badge" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
-      <div style="margin-left:auto;display:flex;gap:8px">
-        <button class="btn btn-del btn-sm" id="force-stop-btn" onclick="forceStopAll()" style="display:none">⏹ 全受付強制終了</button>
-        <button class="btn btn-pri" onclick="showPage('edit',null)">＋ 科目追加</button>
-      </div>
-    </div>
-    <div id="course-list-body"></div>
+  <!-- コメント -->
+  <div class="card hidden" id="comment-card">
+    <h2><span class="badge">STEP 2</span>配信された意見にコメントする</h2>
+    <p style="color:var(--muted); font-size:0.85rem;">他の人の意見が下に表示されます。それぞれにコメントを書いて提出してください（あなたの名前はコメントに表示されます）。</p>
+    <div id="comment-list"></div>
+    <button id="submit-comments-btn">すべてのコメントを提出する</button>
+    <p class="status-msg" id="comment-status"></p>
   </div>
 
-  <!-- ④ 科目編集 -->
-  <div class="page" id="page-edit" style="max-width:500px;margin:0 auto">
-    <div class="card">
-      <p class="sec" id="edit-title">科目追加</p>
-      <div class="alert alert-err" id="edit-err"></div>
-      <input type="hidden" id="edit-id">
-      <div class="field"><label class="lbl">科目名</label><input id="edit-name" placeholder="例：社会福祉概論"></div>
-      <div class="field"><label class="lbl">教室</label><input id="edit-room" placeholder="例：A301"></div>
-      <div class="field"><label class="lbl">担当者（表示名）</label><input id="edit-instructor" placeholder="例：河村 太郎"></div>
-      <div class="field"><label class="lbl">授業コード（ユニバーサルパスポート用）</label><input id="edit-coursecode" placeholder="例：A1234567"></div>
-      <div class="field"><label class="lbl">時限（ユニバーサルパスポート用・半角数字）</label>
-        <input id="edit-period" type="number" min="1" max="9" placeholder="例：1">
-      </div>
-      <div class="field" id="teacher-check-field" style="display:none">
-        <label class="lbl">担当教員（複数選択可）</label>
-        <div id="teacher-checkboxes" style="display:flex;flex-wrap:wrap;gap:10px;padding:8px 0"></div>
-      </div>
-      <div class="field"><label class="lbl">講義回数</label><input id="edit-sessions" type="number" min="1" max="30" value="15" oninput="updateRequiredHint()"></div>
-      <div class="field">
-        <label class="lbl">出席認定ライン（回数）</label>
-        <input id="edit-required" type="number" min="1" max="30" placeholder="例：10（空欄で設定なし）">
-        <div id="required-hint" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
-      </div>
-      <div class="flex-row" style="margin-top:6px">
-        <button class="btn btn-pri" onclick="saveCourse()">保存</button>
-        <button class="btn btn-sec" onclick="showPage('list')">キャンセル</button>
-      </div>
-    </div>
+  <!-- 待機/完了 -->
+  <div class="card hidden" id="waiting-card">
+    <h2>お疲れさまでした</h2>
+    <p id="waiting-message" style="color:var(--muted);"></p>
+    <button id="refresh-btn" class="secondary">最新の状態を確認する</button>
+    <p class="small-note">先生が配信を行うと、このボタンを押すことでコメント画面に切り替わります（自動では切り替わりません）。</p>
   </div>
 
-  <!-- ⑤ セッション管理 -->
-  <div class="page" id="page-session">
-    <div style="margin-bottom:18px">
-      <div id="session-course-name" style="font-size:16px;font-weight:700"></div>
-      <div id="session-course-meta" style="font-size:11px;color:var(--muted);margin-top:3px"></div>
-    </div>
-
-    <!-- 回選択 -->
-    <div class="card">
-      <p class="sec">回の選択</p>
-      <div class="session-tabs" id="session-tabs"></div>
-    </div>
-
-    <!-- コード -->
-    <div class="card">
-      <div class="flex-row" style="margin-bottom:14px">
-        <p class="sec" style="margin:0" id="session-round-label">第1回　受付コード</p>
-        <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <div id="start-controls" style="display:flex;gap:8px;align-items:center">
-            <div style="display:flex;align-items:center;gap:6px">
-              <label style="font-size:11px;color:var(--muted);white-space:nowrap">終了時刻</label>
-              <input type="time" id="auto-stop-time" style="width:100px;margin:0;padding:6px 10px;font-size:12px">
-            </div>
-            <button class="btn btn-succ btn-sm" onclick="startSession()">受付開始</button>
-          </div>
-          <div id="stop-controls" style="display:none;align-items:center;gap:8px">
-            <span id="auto-stop-label" style="font-size:11px;color:var(--muted)"></span>
-            <button class="btn btn-del btn-sm" onclick="stopSession()">受付終了</button>
-          </div>
-        </div>
-      </div>
-      <div class="code-box" id="code-box-inactive">
-        <div style="color:var(--muted);font-size:13px;letter-spacing:1px">受付停止中</div>
-      </div>
-      <div class="code-box" id="code-box-active" style="display:none">
-        <div class="code-big" id="code-display">----</div>
-        <div class="code-sub" id="timer-text">次の更新まで 60 秒</div>
-        <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%"></div></div>
-      </div>
-    </div>
-
-    <!-- 出席者一覧 -->
-    <div class="card">
-      <div class="flex-row" style="margin-bottom:14px">
-        <p class="sec" style="margin:0">出席者一覧　<span id="att-count" style="color:var(--accent)">0名</span></p>
-        <div style="margin-left:auto;display:flex;gap:6px">
-          <button class="btn btn-ghost btn-sm" id="rate-btn" onclick="exportRateCSV()" style="display:none">出席率CSV</button>
-          <button class="btn btn-ghost btn-sm" id="csv-btn"  onclick="exportCSV()"     style="display:none">回別CSV</button>
-          <button class="btn btn-pri btn-sm"   id="up-btn"   onclick="exportUPCSV()"   style="display:none">UPシステム用CSV</button>
-        </div>
-      </div>
-      <div id="att-body"></div>
-    </div>
+  <!-- あなたの意見に届いたコメント -->
+  <div class="card hidden" id="received-card">
+    <h2>あなたの意見に届いたコメント</h2>
+    <div id="received-list"></div>
+    <p class="small-note" id="received-empty-note"></p>
   </div>
 
-  <!-- ⑥ 登録履歴確認 -->
-  <div class="page" id="page-mycheck" style="max-width:560px;margin:0 auto">
-    <div class="card">
-      <p class="sec">登録履歴確認</p>
-      <div class="alert alert-err"  id="mc-err"></div>
-      <div class="field"><label class="lbl">学籍番号</label>
-        <input id="mc-no" placeholder="例：23001001" onkeydown="if(event.key==='Enter')checkMyHistory()">
-      </div>
-      <button class="btn btn-pri btn-full" onclick="checkMyHistory()">確認する</button>
+  <div class="footer-link"><a id="show-teacher-pin-link">教員の方はこちら</a></div>
+</div>
+
+<!-- ============ 教員PIN入力 ============ -->
+<div class="wrap hidden" id="teacher-pin-app">
+  <header>
+    <h1>意見交換アプリ</h1>
+    <p>教員用PINコードを入力してください</p>
+  </header>
+  <div class="card">
+    <div class="field-row">
+      <label for="teacher-pin-input">PINコード</label>
+      <input type="password" id="teacher-pin-input" placeholder="PINコード" autocomplete="off" inputmode="numeric">
     </div>
-    <div id="mc-results"></div>
+    <div class="row">
+      <button id="teacher-pin-submit">管理画面に入る</button>
+      <button id="teacher-pin-cancel" class="secondary">学生画面に戻る</button>
+    </div>
+    <p class="status-msg" id="teacher-pin-status"></p>
+  </div>
+</div>
+
+<!-- ============ 管理画面 ============ -->
+<div class="wrap admin-wrap hidden" id="admin-app">
+  <header>
+    <h1>意見交換アプリ - 管理画面</h1>
+    <p>テーマの作成・配信の実行・提出状況の確認</p>
+    <div class="footer-link" style="margin-top:8px"><a id="admin-logout-link">ログアウト</a></div>
+  </header>
+
+  <div class="card">
+    <h2>① 新しいテーマを作成</h2>
+    <div class="field-row">
+      <label for="new-theme-title">テーマ文（学生に表示される問い）</label>
+      <textarea id="new-theme-title" placeholder="例：地域包括ケアにおける住民参加について、あなたの考えを述べてください"></textarea>
+    </div>
+    <div class="field-row">
+      <label for="assign-count">1人あたり配信する意見の件数</label>
+      <select id="assign-count">
+        <option value="2">2件</option>
+        <option value="3" selected>3件</option>
+      </select>
+    </div>
+    <button id="create-theme-btn">テーマを作成して開始（意見募集を開始）</button>
   </div>
 
-  <!-- ⑥ 学生（出席登録） -->
-  <div class="page" id="page-student" style="max-width:480px;margin:0 auto">
-    <div class="card">
-      <p class="sec">出席登録</p>
-      <div class="alert alert-err" id="stu-err"></div>
-      <div class="alert alert-ok"  id="stu-ok"></div>
-      <div class="field"><label class="lbl">科目選択</label>
-        <select id="stu-course" onchange="onCourseSelect()">
-          <option value="">-- 科目を選択 --</option>
-        </select>
-      </div>
-      <div class="alert alert-info show" id="stu-status" style="margin-bottom:12px"></div>
-      <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001" oninput="clearStuMsg()"></div>
-      <div class="field"><label class="lbl">氏名</label><input id="stu-name" placeholder="例：山田 花子" oninput="clearStuMsg()"></div>
-      <div style="text-align:right;margin-top:-8px;margin-bottom:8px">
-        <button type="button" onclick="clearStudentHistory()" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;text-decoration:underline">入力履歴をクリア</button>
-      </div>
-      <div class="field"><label class="lbl">出席コード（4桁）</label>
-        <input id="stu-code" maxlength="4" placeholder="0000" class="pin-input"
-          onkeydown="if(event.key==='Enter')submitAttendance()">
-      </div>
-      <button class="btn btn-pri btn-full" onclick="submitAttendance()">出席登録</button>
-    </div>
-    <div class="card" id="active-courses-card" style="display:none">
-      <p class="sec">現在受付中の科目</p>
-      <div id="active-courses-body"></div>
-    </div>
+  <div class="card">
+    <h2>② 現在進行中のテーマ</h2>
+    <div id="current-theme-box">読み込み中…</div>
   </div>
 
-</div><!-- /wrap -->
+  <div class="card">
+    <h2>③ テーマ一覧</h2>
+    <div id="theme-list">読み込み中…</div>
+  </div>
+
+  <p id="admin-log"></p>
+  <div class="footer-link"><a id="back-to-student-link">学生画面に戻る</a></div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
 <script>
-// ── Firebase 初期化 ──────────────────────────────────────────────
-firebase.initializeApp({
-  apiKey:            "AIzaSyA8yv2AL8ppFebDYRDcwcXmcaLORvW1tmU",
-  authDomain:        "lecture-attendance-90b9c.firebaseapp.com",
-  databaseURL:       "https://lecture-attendance-90b9c-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId:         "lecture-attendance-90b9c",
-  messagingSenderId: "1074810980063",
-  appId:             "1:1074810980063:web:c8c0280133354ccb618b6a",
-});
-const db   = firebase.database();
+/* ===== Firebaseプロジェクトの設定値 ===== */
+const firebaseConfig = {
+  apiKey: "AIzaSyBWIsFaEkcM-mrfpuMirs2klEr-1S4QEcM",
+  authDomain: "opinion-exchange-app-54232.firebaseapp.com",
+  databaseURL: "https://opinion-exchange-app-54232-default-rtdb.firebaseio.com",
+  projectId: "opinion-exchange-app-54232",
+};
+/* ======================================== */
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 const auth = firebase.auth();
+
+const TEACHER_PIN = "1234";
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+/* ===================================================================
+   Googleログイン（NBUドメイン限定）
+   =================================================================== */
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 googleProvider.setCustomParameters({ hd: "nbu.ac.jp" });
+let appInited = false;
 
-// ── 状態 ─────────────────────────────────────────────────────────
-let currentUser  = null; // Googleログイン中のユーザー
-let courses      = {};
-let activeSes    = {};
-let allAttendance = {}; // 全出席データ（科目一覧の件数表示用）
-let currentPage  = "home";
-let prevPage     = "home";
-let sessionCourseId = null;
-let sessionSelIdx   = 0;
-let timerInterval   = null;
-let attUnsubscribe  = null;
-
-// ── Firebase 購読（ログイン後に開始） ────────────────────────────
-function startFirebaseListeners() {
-  db.ref("courses").on("value", snap => {
-    courses = snap.val() || {};
-    if (currentPage === "list")    renderCourseList();
-    if (currentPage === "student") renderStudentCourses();
-    if (currentPage === "session") renderSessionCourse();
-  });
-  db.ref("activeSessions").on("value", snap => {
-    activeSes = snap.val() || {};
-    if (currentPage === "session") renderSessionCode();
-    if (currentPage === "student") renderStudentStatus();
-    if (currentPage === "list")    renderCourseList();
-  });
-  db.ref("attendance").on("value", snap => {
-    allAttendance = snap.val() || {};
-    if (currentPage === "list") renderCourseList();
-  });
-}
-
-// ── Google ログイン制御 ────────────────────────────────────────
 auth.onAuthStateChanged(user => {
   if (user && user.email && user.email.endsWith("@nbu.ac.jp")) {
-    currentUser = user;
-    document.getElementById("login-screen").style.display = "none";
-    document.getElementById("app-screen").style.display   = "block";
-    document.getElementById("login-user-name").textContent = user.displayName || user.email;
-    startFirebaseListeners();
+    if (!appInited) { appInited = true; initApp(); }
+    showScreen('student');
   } else {
-    if (user) auth.signOut(); // NBU以外のアカウントは即ログアウト
-    currentUser = null;
-    document.getElementById("login-screen").style.display = "block";
-    document.getElementById("app-screen").style.display   = "none";
+    if (user) auth.signOut(); // NBU以外のアカウントは強制サインアウト
+    showScreen('gate');
   }
 });
 
-async function loginWithGoogle() {
+document.getElementById('gate-login-btn').addEventListener('click', async () => {
   try {
-    await auth.signInWithPopup(googleProvider);
-  } catch(e) {
-    alert("ログインに失敗しました。NBUのGoogleアカウントでお試しください。
-" + e.message);
+    const result = await auth.signInWithPopup(googleProvider);
+    if (!result.user.email.endsWith("@nbu.ac.jp")) {
+      await auth.signOut();
+      alert("NBUのGoogleアカウントでログインしてください");
+    }
+  } catch (e) {
+    alert("ログインに失敗しました: " + e.message);
   }
-}
+});
+document.getElementById('student-logout-link').addEventListener('click', (e) => { e.preventDefault(); auth.signOut(); });
+document.getElementById('admin-logout-link').addEventListener('click', (e) => { e.preventDefault(); auth.signOut(); });
 
-async function logoutGoogle() {
-  if (!confirm("ログアウトしますか？")) return;
-  await auth.signOut();
-  currentTeacher = null;
-  showPage("home");
-}
-
-// ── ページ遷移 ────────────────────────────────────────────────────
-function showPage(name, extra) {
-  prevPage = currentPage;
-  currentPage = name;
-  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
-  document.getElementById("page-" + name).classList.add("active");
-  document.getElementById("back-btn").style.display = name === "home" ? "none" : "";
-
-  if (name === "list")    renderCourseList();
-  if (name === "edit")    openEdit(extra);
-  if (name === "session") openSession(extra);
-  if (name === "student") { renderStudentCourses(); renderStudentStatus(); loadStudentHistory(); }
-  if (name === "mycheck") {
-    document.getElementById("mc-err").classList.remove("show");
-    document.getElementById("mc-results").innerHTML = "";
-    try {
-      const savedNo = localStorage.getItem("stu_no");
-      if (savedNo) document.getElementById("mc-no").value = savedNo;
-    } catch(e) {}
-  }
-  if (name === "pin")     { document.getElementById("pin-input").value=""; document.getElementById("pin-err").classList.remove("show"); setTimeout(()=>document.getElementById("pin-input").focus(),100); }
-}
-
-function goBack() {
-  const dest = (currentPage === "student" || currentPage === "pin" || currentPage === "mycheck") ? "home"
-             : (currentPage === "edit" || currentPage === "session")  ? "list"
-             : "home";
-  stopTimerLoop();
-  if (attUnsubscribe) { attUnsubscribe(); attUnsubscribe = null; }
-  if (dest === "home") currentTeacher = null;
-  showPage(dest);
-}
-
-// ── PIN ───────────────────────────────────────────────────────────
-// ── 教員マスタ ───────────────────────────────────────────────────
-const TEACHERS = {
-  "7373": { id: "kawamura",  name: "河村" },
-  "3986": { id: "otani",     name: "大谷" },
-  "2940": { id: "hashimoto", name: "橋本拓" },
-  "7986": { id: "nabeta",    name: "鍋田" },
+/* ===================================================================
+   画面切り替え（ゲート / 学生 / 教員PIN入力 / 管理画面）
+   =================================================================== */
+const screens = {
+  gate: document.getElementById('gate-app'),
+  student: document.getElementById('student-app'),
+  teacherPin: document.getElementById('teacher-pin-app'),
+  admin: document.getElementById('admin-app'),
 };
-const ADMIN_PIN = "1234";
-let currentTeacher = null; // { id, name } or { id:"admin", name:"管理者" }
 
-function checkPin() {
-  const pin = document.getElementById("pin-input").value;
-  if (pin === ADMIN_PIN) {
-    currentTeacher = { id: "admin", name: "管理者" };
-    showPage("list");
-  } else if (TEACHERS[pin]) {
-    currentTeacher = TEACHERS[pin];
-    showPage("list");
+function showScreen(name) {
+  Object.values(screens).forEach(el => el.classList.add('hidden'));
+  screens[name].classList.remove('hidden');
+}
+
+document.getElementById('show-teacher-pin-link').addEventListener('click', (e) => {
+  e.preventDefault();
+  document.getElementById('teacher-pin-input').value = '';
+  document.getElementById('teacher-pin-status').textContent = '';
+  showScreen('teacherPin');
+});
+
+document.getElementById('teacher-pin-cancel').addEventListener('click', () => {
+  showScreen('student');
+});
+
+document.getElementById('teacher-pin-submit').addEventListener('click', () => {
+  const val = document.getElementById('teacher-pin-input').value.trim();
+  if (val === TEACHER_PIN) {
+    showScreen('admin');
+    adminLoadCurrentTheme();
+    adminLoadThemeList();
   } else {
-    const el = document.getElementById("pin-err");
-    el.textContent = "PINが正しくありません";
-    el.classList.add("show");
-    document.getElementById("pin-input").value = "";
+    document.getElementById('teacher-pin-status').textContent = 'PINが正しくありません。';
   }
-}
-function pinErr() { document.getElementById("pin-err").classList.remove("show"); }
+});
 
-// ── 科目一覧 ──────────────────────────────────────────────────────
-function renderCourseList() {
-  const el = document.getElementById("course-list-body");
-  // ログイン中の教員名バッジ
-  const badge = document.getElementById("teacher-badge");
-  if (badge && currentTeacher) badge.textContent = `ログイン中：${currentTeacher.name}`;
+document.getElementById('back-to-student-link').addEventListener('click', (e) => {
+  e.preventDefault();
+  showScreen('student');
+});
 
-  // 管理者のみ強制終了ボタンを表示、受付中があるときだけ有効化
-  const forceBtn = document.getElementById("force-stop-btn");
-  if (forceBtn) {
-    forceBtn.style.display = currentTeacher?.id === "admin" ? "" : "none";
-    const hasActive = Object.keys(activeSes).length > 0;
-    forceBtn.style.opacity = hasActive ? "1" : "0.4";
-    forceBtn.style.pointerEvents = hasActive ? "" : "none";
-  }
+/* ===================================================================
+   学生用ロジック
+   =================================================================== */
+let currentThemeId = null;
+let myKey = null;
+let myName = "";
+let myStudentId = "";
 
-  // 管理者は全科目、教員は自分の科目だけ
-  const entries = Object.entries(courses).filter(([id, c]) => {
-    if (currentTeacher?.id === "admin") return true;
-    const ids = c.teacherIds || (c.teacherId ? [c.teacherId] : []);
-    return ids.includes(currentTeacher?.id);
-  });
-  if (entries.length === 0) {
-    el.innerHTML = `<div class="alert alert-info show">科目が登録されていません。「科目追加」から登録してください。</div>`;
-    return;
-  }
-  el.innerHTML = entries.map(([id, c]) => {
-    const active    = activeSes[id];
-    const attData   = allAttendance[id] || {};
-    // 回ごとの出席者数を集計
-    const sessionCounts = Array.from({length: c.sessions}, (_, i) => {
-      const n = attData[i] ? Object.keys(attData[i]).length : 0;
-      return n > 0 ? `第${i+1}回:${n}名` : null;
-    }).filter(Boolean);
-    const totalAtt  = Object.values(attData).reduce((sum, s) => sum + Object.keys(s).length, 0);
-    const attSummary = sessionCounts.length > 0
-      ? `<div style="margin-top:10px;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">
-          <div style="font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">出席者数　合計 ${totalAtt}件</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px">${sessionCounts.map(s=>`<span style="font-size:11px;color:var(--sub)">${s}</span>`).join('<span style="color:var(--border)">／</span>')}</div>
-        </div>`
-      : `<div style="margin-top:10px;font-size:11px;color:var(--muted)">出席データなし</div>`;
-    return `<div class="course-card">
-      <div class="course-name">${esc(c.name)}</div>
-      <div class="course-meta">
-        <span class="tag tag-purple">🏫 ${esc(c.room)}</span>
-        <span class="tag tag-green">👤 ${esc(c.instructor)}</span>
-        <span class="tag tag-yellow">📅 全${c.sessions}回</span>
-        ${c.courseCode ? `<span class="tag" style="background:#88888822;color:#666;border:1px solid #88888833">📑 ${esc(c.courseCode)}</span>` : ""}
-        ${c.period ? `<span class="tag" style="background:#88888822;color:#666;border:1px solid #88888833">🕐 ${c.period}限</span>` : ""}
-        ${c.requiredSessions ? `<span class="tag" style="background:#4f5bd522;color:var(--accent);border:1px solid #4f5bd533">✅ ${c.requiredSessions}回以上で認定</span>` : ""}
-        ${active ? `<span class="tag tag-red">● 受付中（第${Number(activeSes[id].sessionIdx)+1}回）</span>` : ""}
-        ${currentTeacher?.id === "admin" ? `<span class="tag" style="background:#88888822;color:#888;border:1px solid #88888833">🔑 ${(c.teacherIds||[c.teacherId||""]).map(tid=>getTeacherName(tid)).join("・")}</span>` : ""}
-      </div>
-      ${attSummary}
-      <div class="course-actions" style="margin-top:12px">
-        <button class="btn btn-pri btn-sm" onclick="showPage('session','${id}')">セッション管理</button>
-        <button class="btn btn-ghost btn-sm" onclick="showPage('edit','${id}')">編集</button>
-        <button class="btn btn-del btn-sm" onclick="deleteCourse('${id}','${esc(c.name)}')">削除</button>
-      </div>
-    </div>`;
-  }).join("");
+const els = {
+  loginCard: document.getElementById('login-card'),
+  opinionCard: document.getElementById('opinion-card'),
+  commentCard: document.getElementById('comment-card'),
+  waitingCard: document.getElementById('waiting-card'),
+  receivedCard: document.getElementById('received-card'),
+  themeTitleSub: document.getElementById('theme-title-sub'),
+  themeTextDisplay: document.getElementById('theme-text-display'),
+};
+
+function makeKey(name, sid) {
+  return sid.trim().replace(/[.#$\[\]/]/g, '_');
 }
 
-// ── 科目編集 ──────────────────────────────────────────────────────
-function openEdit(idOrNull) {
-  const id = idOrNull && typeof idOrNull === "string" ? idOrNull : null;
-  const c  = id ? courses[id] : null;
-  document.getElementById("edit-title").textContent      = c ? "科目編集" : "科目追加";
-  document.getElementById("edit-id").value               = id || "";
-  document.getElementById("edit-name").value             = c?.name       || "";
-  document.getElementById("edit-room").value             = c?.room       || "";
-  document.getElementById("edit-instructor").value       = c?.instructor || "";
-  document.getElementById("edit-coursecode").value       = c?.courseCode || "";
-  document.getElementById("edit-period").value           = c?.period     || "";
-  document.getElementById("edit-sessions").value         = c?.sessions   || 15;
-  document.getElementById("edit-err").classList.remove("show");
-  document.getElementById("edit-required").value = c?.requiredSessions ?? "";
-  updateRequiredHint();
+document.getElementById('login-btn').addEventListener('click', () => {
+  const familyName = document.getElementById('student-family-name').value.trim();
+  const givenName = document.getElementById('student-given-name').value.trim();
+  const sid = document.getElementById('student-id').value.trim();
+  if (!familyName) { alert('姓を入力してください'); return; }
+  if (!givenName) { alert('名を入力してください'); return; }
+  if (!sid) { alert('学籍番号を入力してください'); return; }
+  // 姓・名の間は常に全角スペース1つで統一する（半角/全角や有無のばらつきを防止）
+  const name = familyName + '\u3000' + givenName;
+  myName = name;
+  myStudentId = sid;
+  myKey = makeKey(name, sid);
+  sessionStorage.setItem('opinionapp_name', myName);
+  sessionStorage.setItem('opinionapp_sid', myStudentId);
+  sessionStorage.setItem('opinionapp_key', myKey);
+  els.loginCard.classList.add('hidden');
+  loadCurrentTheme();
+});
 
-  // 管理者のみ担当教員選択を表示
-  const checkField = document.getElementById("teacher-check-field");
-  const checkboxes = document.getElementById("teacher-checkboxes");
-  if (currentTeacher?.id === "admin") {
-    checkField.style.display = "";
-    const teacherIds = c?.teacherIds || (c?.teacherId ? [c.teacherId] : []);
-    checkboxes.innerHTML = Object.entries(TEACHERS).map(([pin, t]) => `
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer">
-        <input type="checkbox" value="${t.id}" ${teacherIds.includes(t.id) ? "checked" : ""}
-          style="width:16px;height:16px;margin:0;accent-color:var(--accent)">
-        ${t.name}
-      </label>`).join("");
-  } else {
-    checkField.style.display = "none";
+function initApp() {
+  const savedKey = sessionStorage.getItem('opinionapp_key');
+  if (savedKey) {
+    myName = sessionStorage.getItem('opinionapp_name') || '';
+    myStudentId = sessionStorage.getItem('opinionapp_sid') || '';
+    myKey = savedKey;
+    els.loginCard.classList.add('hidden');
+    loadCurrentTheme();
   }
 }
 
-async function saveCourse() {
-  const name       = document.getElementById("edit-name").value.trim();
-  const room       = document.getElementById("edit-room").value.trim();
-  const instructor = document.getElementById("edit-instructor").value.trim();
-  const sessions   = parseInt(document.getElementById("edit-sessions").value);
-  const id         = document.getElementById("edit-id").value;
-  if (!name || !room || !instructor || !sessions) {
-    showEditErr("すべての項目を入力してください"); return;
-  }
-  // 担当教員IDリストを決定
-  let teacherIds;
-  if (currentTeacher?.id === "admin") {
-    // 管理者：チェックボックスから取得
-    const checked = Array.from(document.querySelectorAll("#teacher-checkboxes input:checked")).map(el => el.value);
-    teacherIds = checked.length > 0 ? checked : (id && courses[id]?.teacherIds) || [];
-  } else {
-    // 一般教員：自分のIDを維持（既存があれば引き継ぐ）
-    teacherIds = id && courses[id]?.teacherIds ? courses[id].teacherIds : [currentTeacher?.id || ""];
-  }
-  const reqVal = document.getElementById("edit-required").value;
-  const requiredSessions = reqVal ? Number(reqVal) : null;
-  const courseCode = document.getElementById("edit-coursecode").value.trim();
-  const period     = document.getElementById("edit-period").value;
-  const data = { name, room, instructor, sessions, teacherIds, courseCode, period };
-  if (requiredSessions) data.requiredSessions = requiredSessions;
-  else data.requiredSessions = null;
-  try {
-    if (id) await db.ref(`courses/${id}`).update(data);
-    else    await db.ref("courses").push(data);
-    showPage("list");
-  } catch(e) { showEditErr("保存に失敗しました: " + e.message); }
-}
-function showEditErr(msg) {
-  const el = document.getElementById("edit-err");
-  el.textContent = msg; el.classList.add("show");
-}
-
-async function deleteCourse(id, name) {
-  if (!confirm(`「${name}」を削除しますか？`)) return;
-  await db.ref(`courses/${id}`).remove();
-  await db.ref(`activeSessions/${id}`).remove();
-  await db.ref(`attendance/${id}`).remove();
-}
-
-// ── セッション管理 ────────────────────────────────────────────────
-function openSession(id) {
-  sessionCourseId = id;
-  sessionSelIdx   = 0;
-  // 終了時刻は空欄にリセット
-  const timeInput = document.getElementById("auto-stop-time");
-  if (timeInput) timeInput.value = "";
-  renderSessionCourse();
-  renderSessionTabs();
-  renderSessionCode();
-
-  // 出席データ購読
-  if (attUnsubscribe) attUnsubscribe();
-  const ref = db.ref(`attendance/${id}`);
-  const handler = snap => {
-    renderAttendance(snap.val() || {});
-  };
-  ref.on("value", handler);
-  attUnsubscribe = () => ref.off("value", handler);
-}
-
-function renderSessionCourse() {
-  const c = courses[sessionCourseId];
-  if (!c) return;
-  document.getElementById("session-course-name").textContent = c.name;
-  document.getElementById("session-course-meta").textContent = `${c.room} ／ ${c.instructor}`;
-  renderSessionTabs();
-}
-
-function renderSessionTabs() {
-  const c = courses[sessionCourseId];
-  if (!c) return;
-  document.getElementById("session-tabs").innerHTML =
-    Array.from({length: c.sessions}, (_, i) =>
-      `<button class="session-tab ${i===sessionSelIdx?'active':'inactive'}"
-        onclick="selectSessionIdx(${i})">${i+1}</button>`
-    ).join("");
-  document.getElementById("session-round-label").textContent = `第${sessionSelIdx+1}回　受付コード`;
-}
-
-function selectSessionIdx(i) {
-  sessionSelIdx = i;
-  renderSessionTabs();
-  renderSessionCode();
-  // 回を切り替えたら出席一覧も更新
-  if (window._lastAllData) renderAttendance(window._lastAllData);
-}
-
-function renderSessionCode() {
-  const ses    = activeSes[sessionCourseId];
-  const active = ses && Number(ses.sessionIdx) === Number(sessionSelIdx);
-
-  document.getElementById("start-controls").style.display = active ? "none" : "flex";
-  document.getElementById("stop-controls").style.display  = active ? "flex" : "none";
-  document.getElementById("code-box-inactive").style.display = active ? "none" : "";
-  document.getElementById("code-box-active").style.display   = active ? ""     : "none";
-
-  // 自動終了時刻ラベル
-  if (active && ses.autoStopTime) {
-    document.getElementById("auto-stop-label").textContent = `自動終了 ${ses.autoStopTime}`;
-  } else {
-    document.getElementById("auto-stop-label").textContent = "";
-  }
-
-  stopTimerLoop();
-  if (active) {
-    document.getElementById("code-display").textContent = ses.code;
-    startTimerLoop(ses);
-  }
-}
-
-function startTimerLoop(ses) {
-  const tick = async () => {
-    const now     = Date.now();
-    const elapsed = Math.floor((now - ses.codeIssuedAt) / 1000);
-    const remaining = 60 - (elapsed % 60);
-    document.getElementById("timer-text").textContent = `次の更新まで ${remaining} 秒`;
-    document.getElementById("timer-fill").style.width  = (remaining / 60 * 100) + "%";
-
-    // 自動終了チェック
-    if (ses.autoStopAt && now >= ses.autoStopAt) {
-      stopTimerLoop();
-      await db.ref(`activeSessions/${sessionCourseId}`).remove();
+function loadCurrentTheme() {
+  db.ref('themes/current').once('value').then(snap => {
+    const themeId = snap.val();
+    if (!themeId) {
+      els.themeTitleSub.textContent = '現在、進行中のテーマはありません。';
       return;
     }
+    currentThemeId = themeId;
+    db.ref('themes/list/' + themeId).once('value').then(themeSnap => {
+      const theme = themeSnap.val();
+      if (!theme) return;
+      els.themeTitleSub.textContent = theme.title;
+      els.themeTextDisplay.textContent = theme.title;
+      routeByStatus(theme);
+    });
+  });
+}
 
-    if (elapsed > 0 && elapsed % 60 === 0) {
-      const newCode = genCode();
-      db.ref(`activeSessions/${sessionCourseId}/code`).set(newCode);
-      db.ref(`activeSessions/${sessionCourseId}/codeIssuedAt`).set(Date.now());
-      document.getElementById("code-display").textContent = newCode;
-      ses = { ...ses, code: newCode, codeIssuedAt: Date.now() };
+function routeByStatus(theme) {
+  db.ref(`opinions/${currentThemeId}/${myKey}`).once('value').then(oppSnap => {
+    const hasSubmittedOpinion = oppSnap.exists();
+    const showReceived = hasSubmittedOpinion && (theme.status === 'distributed' || theme.status === 'closed');
+
+    if (theme.status === 'open' && !hasSubmittedOpinion) {
+      els.opinionCard.classList.remove('hidden');
+      els.receivedCard.classList.add('hidden');
+      return;
     }
-  };
-  tick();
-  timerInterval = setInterval(tick, 1000);
-}
-function stopTimerLoop() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
-
-async function startSession() {
-  const timeVal = document.getElementById("auto-stop-time").value;
-  const data = {
-    sessionIdx:   Number(sessionSelIdx),
-    code:         genCode(),
-    codeIssuedAt: Date.now(),
-  };
-  if (timeVal) {
-    data.autoStopTime = timeVal; // "HH:MM" 形式
-    // 今日の終了時刻をUNIXタイムスタンプに変換
-    const [h, m] = timeVal.split(":").map(Number);
-    const stopAt = new Date();
-    stopAt.setHours(h, m, 0, 0);
-    // もし指定時刻が過去なら翌日として扱う
-    if (stopAt.getTime() <= Date.now()) stopAt.setDate(stopAt.getDate() + 1);
-    data.autoStopAt = stopAt.getTime();
-  }
-  await db.ref(`activeSessions/${sessionCourseId}`).set(data);
-}
-async function stopSession() {
-  stopTimerLoop();
-  await db.ref(`activeSessions/${sessionCourseId}`).remove();
-}
-
-// 出席者一覧
-function renderAttendance(allData) {
-  window._lastAllData = allData;
-  const records = allData[sessionSelIdx] ? Object.entries(allData[sessionSelIdx]) : [];
-  document.getElementById("att-count").textContent = records.length + "名";
-  document.getElementById("csv-btn").style.display  = records.length ? "" : "none";
-  document.getElementById("up-btn").style.display   = records.length ? "" : "none";
-
-  // 出席率CSV：全回にデータがあれば表示
-  const totalAtt = Object.keys(allData).length;
-  document.getElementById("rate-btn").style.display = totalAtt ? "" : "none";
-
-  // 認定ライン警告バナーを更新
-  const course   = courses[sessionCourseId];
-  const required = course?.requiredSessions;
-  let warningEl  = document.getElementById("cert-warning");
-  if (!warningEl) {
-    warningEl = document.createElement("div");
-    warningEl.id = "cert-warning";
-    document.getElementById("att-body").before(warningEl);
-  }
-  if (required) {
-    // 全回のデータから認定未達の学生を検出
-    const studentMap = {};
-    Object.entries(allData).forEach(([idx, sd]) => {
-      Object.values(sd).forEach(r => {
-        if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { name: r.name, count: 0 };
-        studentMap[r.studentNo].count++;
-      });
-    });
-    const atRisk = Object.entries(studentMap).filter(([, s]) => s.count < required);
-    warningEl.innerHTML = atRisk.length
-      ? `<div style="padding:10px 14px;background:#ff6b6b11;border:1px solid #ff6b6b33;border-radius:8px;margin-bottom:12px;font-size:12px;color:var(--red)">
-          ⚠️ 認定ライン（${required}回）未達：${atRisk.length}名
-          <span style="color:var(--muted);margin-left:8px">${atRisk.map(([,s])=>s.name).join("・")}</span>
-        </div>`
-      : `<div style="padding:10px 14px;background:#2ecc7111;border:1px solid #2ecc7133;border-radius:8px;margin-bottom:12px;font-size:12px;color:var(--green)">
-          ✅ 全員が認定ライン（${required}回）を達成しています
-        </div>`;
-  } else {
-    warningEl.innerHTML = "";
-  }
-
-  if (records.length === 0) {
-    document.getElementById("att-body").innerHTML =
-      `<div style="color:var(--muted);text-align:center;padding:18px 0;font-size:12px">出席者がいません</div>`;
-    window._lastRecords = [];
-    return;
-  }
-  document.getElementById("att-body").innerHTML = `
-    <table>
-      <thead><tr><th>学籍番号</th><th>氏名</th><th>登録時刻</th><th>IPアドレス</th><th></th></tr></thead>
-      <tbody>${records.map(([rid, r]) => `<tr>
-        <td>${esc(r.studentNo)}</td>
-        <td>${esc(r.name)}</td>
-        <td>${fmtTime(r.time)}</td>
-        <td style="font-size:11px;color:var(--muted)">${esc(r.ip||"―")}</td>
-        <td><button class="btn btn-del btn-sm" onclick="deleteRecord('${rid}')">削除</button></td>
-      </tr>`).join("")}</tbody>
-    </table>`;
-  window._lastRecords = records.map(([,r]) => r);
-}
-
-async function deleteRecord(rid) {
-  await db.ref(`attendance/${sessionCourseId}/${sessionSelIdx}/${rid}`).remove();
-}
-
-function exportCSV() {
-  const rows = window._lastRecords || [];
-  const csv  = "\uFEFF学籍番号,氏名,登録時刻,IPアドレス\n" + rows.map(r => `${r.studentNo},${r.name},${fmtTime(r.time)},${r.ip||""}`).join("\n");
-  const a    = document.createElement("a");
-  a.href     = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
-  a.download = `出席_第${sessionSelIdx+1}回.csv`;
-  a.click();
-}
-
-function exportUPCSV() {
-  const rows   = window._lastRecords || [];
-  const course = courses[sessionCourseId];
-  if (!course) return;
-  if (rows.length === 0) { alert("この回の出席者がいません"); return; }
-
-  const courseCode = course.courseCode || "";
-  const period      = course.period || "";
-
-  const header = "\uFEFF授業コード,授業科目,学籍番号,氏名,学生氏名＿カナ,学生氏名＿英語,実施日,時限,出欠区分";
-  const body = rows.map(r => {
-    const d = new Date(r.time);
-    const implDate = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
-    return `${courseCode},${course.name},${r.studentNo},${r.name},,,${implDate},${period},0`;
-  }).join("\n");
-
-  // 改行コードをLFに統一（CRLFが混入しないように）・末尾改行なし
-  const csv = (header + "\n" + body).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
-  const a   = document.createElement("a");
-  a.href    = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
-  a.download = `UP出席_${course.name}_第${sessionSelIdx+1}回.csv`;
-  a.click();
-}
-
-function exportRateCSV() {
-  const allData  = window._lastAllData || {};
-  const course   = courses[sessionCourseId];
-  if (!course) return;
-  const total    = course.sessions;
-
-  // 全学生を収集
-  const studentMap = {}; // { studentNo: { name, counts: Set } }
-  Object.entries(allData).forEach(([idx, sessionData]) => {
-    Object.values(sessionData).forEach(r => {
-      if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { name: r.name, attended: new Set() };
-      studentMap[r.studentNo].attended.add(Number(idx));
-    });
-  });
-
-  // ヘッダー行：学籍番号,氏名,出席回数,総回数,出席率,第1回,第2回,...
-  const required     = course.requiredSessions || null;
-  const roundHeaders = Array.from({length: total}, (_, i) => `第${i+1}回`).join(",");
-  const certCol      = required ? ",認定" : "";
-  const header       = `\uFEFF学籍番号,氏名,出席回数,総回数,出席率${certCol},${roundHeaders}`;
-
-  // データ行
-  const rows = Object.entries(studentMap)
-    .sort(([a],[b]) => a.localeCompare(b))
-    .map(([no, s]) => {
-      const count   = s.attended.size;
-      const rate    = Math.round(count / total * 100);
-      const cert    = required ? (count >= required ? "○" : "×") : "";
-      const certVal = required ? `,${cert}` : "";
-      const rounds  = Array.from({length: total}, (_, i) => s.attended.has(i) ? "○" : "―").join(",");
-      return `${no},${s.name},${count},${total},${rate}%${certVal},${rounds}`;
-    });
-
-  const csv = header + "\n" + rows.join("\n");
-  const a   = document.createElement("a");
-  a.href    = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
-  a.download = `出席率_${course.name}.csv`;
-  a.click();
-}
-
-// ── 学生画面 ──────────────────────────────────────────────────────
-function renderStudentCourses() {
-  const sel = document.getElementById("stu-course");
-  const cur = sel.value;
-  // 受付中の科目だけ表示
-  const activeEntries = Object.entries(courses).filter(([id]) => activeSes[id]);
-  if (activeEntries.length === 0) {
-    sel.innerHTML = `<option value="">-- 現在受付中の科目はありません --</option>`;
-  } else {
-    sel.innerHTML = `<option value="">-- 科目を選択 --</option>` +
-      activeEntries.map(([id, c]) =>
-        `<option value="${id}">${esc(c.name)}　第${activeSes[id].sessionIdx+1}回</option>`
-      ).join("");
-  }
-  // 以前選択していた科目が受付中なら維持、そうでなければリセット
-  sel.value = activeSes[cur] ? cur : "";
-  renderStudentStatus();
-}
-
-function renderStudentStatus() {
-  const id  = document.getElementById("stu-course").value;
-  const el  = document.getElementById("stu-status");
-  const ses = id ? activeSes[id] : null;
-  if (!id)  { el.className="alert alert-info"; el.style.display="none"; el.textContent=""; return; }
-  el.style.display = "block";
-  if (ses)  { el.className="alert alert-info show"; el.textContent=`第${Number(ses.sessionIdx)+1}回　受付中`; }
-  else      { el.className="alert alert-err show";  el.textContent="この科目は現在受付中ではありません"; }
-
-  // 受付中科目は選択肢に統合したのでカードは非表示
-  document.getElementById("active-courses-card").style.display = "none";
-}
-
-function onCourseSelect() {
-  document.getElementById("stu-err").classList.remove("show");
-  document.getElementById("stu-ok").classList.remove("show");
-  renderStudentStatus();
-}
-
-async function submitAttendance() {
-  const courseId  = document.getElementById("stu-course").value;
-  const studentNo = document.getElementById("stu-no").value.trim();
-  const name      = document.getElementById("stu-name").value.trim();
-  const code      = document.getElementById("stu-code").value.trim();
-  const errEl     = document.getElementById("stu-err");
-  const okEl      = document.getElementById("stu-ok");
-  errEl.classList.remove("show"); okEl.classList.remove("show");
-
-  const showErr = msg => { errEl.textContent=msg; errEl.classList.add("show"); };
-
-  if (!courseId || !studentNo || !name || !code) { showErr("すべての項目を入力してください"); return; }
-  const ses = activeSes[courseId];
-  if (!ses)               { showErr("この科目は現在受付中ではありません"); return; }
-  if (ses.code !== code)  { showErr("出席コードが違います"); return; }
-
-  // Cookie による端末制限チェック
-  const cKey = cookieKey(courseId, Number(ses.sessionIdx));
-  if (hasCookie(cKey)) {
-    showErr("この端末からはすでに出席登録済みです"); return;
-  }
-
-  // IPアドレス取得（チェック前に取得しておく）
-  let ip = "取得失敗";
-  try {
-    const ipRes = await fetch("https://api.ipify.org?format=json");
-    const ipJson = await ipRes.json();
-    ip = ipJson.ip;
-  } catch(e) { ip = "取得失敗"; }
-
-  // トランザクションで二重登録を確実に防止
-  // 学籍番号をキーにした専用パスを使い、同時アクセスでも1件しか書き込めない構造にする
-  const lockRef = db.ref(`attendance_lock/${courseId}/${Number(ses.sessionIdx)}/${studentNo.replace(/[.#$[\]]/g,"_")}`);
-  try {
-    let alreadyExists = false;
-    await lockRef.transaction(current => {
-      if (current !== null) {
-        alreadyExists = true;
-        return; // undefinedを返すとabort（書き込まない）
-      }
-      return { name, time: new Date().toISOString(), ip };
-    });
-
-    if (alreadyExists) {
-      showErr("すでに出席登録済みです"); return;
+    if (theme.status === 'open' && hasSubmittedOpinion) {
+      showWaiting('意見を提出済みです。配信が開始されるまでお待ちください。');
+      return;
     }
+    if (theme.status === 'distributed') {
+      checkAssignmentAndShowComments();
+      if (showReceived) loadReceivedComments();
+      return;
+    }
+    if (theme.status === 'closed') {
+      showWaiting('このテーマは終了しました。');
+      if (showReceived) loadReceivedComments();
+      return;
+    }
+    showWaiting('状況を確認しています。');
+  });
+}
 
-    // 本データも保存（一覧表示・CSV用）
-    await db.ref(`attendance/${courseId}/${Number(ses.sessionIdx)}`).push({
-      studentNo, name, time: new Date().toISOString(), ip
+function loadReceivedComments() {
+  db.ref(`comments/${currentThemeId}`).once('value').then(snap => {
+    const all = snap.val() || {};
+    const received = [];
+    Object.keys(all).forEach(commenterKey => {
+      const targets = all[commenterKey] || {};
+      if (targets[myKey]) { received.push(targets[myKey]); }
     });
 
-    setCookie(cookieKey(courseId, Number(ses.sessionIdx)));
-    saveStudentHistory(studentNo, name);
-    okEl.textContent = `「${courses[courseId]?.name}」第${Number(ses.sessionIdx)+1}回の出席を登録しました`;
-    okEl.classList.add("show");
-    document.getElementById("stu-code").value = "";
-  } catch(e) { showErr("登録に失敗しました: " + e.message); }
-}
+    els.receivedCard.classList.remove('hidden');
+    const list = document.getElementById('received-list');
+    const emptyNote = document.getElementById('received-empty-note');
 
-// ── 学生入力履歴（LocalStorage） ────────────────────────────────
-function saveStudentHistory(studentNo, name) {
-  try { localStorage.setItem("stu_no", studentNo); localStorage.setItem("stu_name", name); } catch(e) {}
-}
-function loadStudentHistory() {
-  try {
-    const no   = localStorage.getItem("stu_no");
-    const name = localStorage.getItem("stu_name");
-    if (no)   document.getElementById("stu-no").value   = no;
-    if (name) document.getElementById("stu-name").value = name;
-  } catch(e) {}
-}
-function clearStudentHistory() {
-  try { localStorage.removeItem("stu_no"); localStorage.removeItem("stu_name"); } catch(e) {}
-  document.getElementById("stu-no").value   = "";
-  document.getElementById("stu-name").value = "";
-}
-function clearStuMsg() {
-  document.getElementById("stu-err").classList.remove("show");
-  document.getElementById("stu-ok").classList.remove("show");
-}
-
-function updateRequiredHint() {
-  const sessions = parseInt(document.getElementById("edit-sessions").value) || 0;
-  const required = parseInt(document.getElementById("edit-required").value) || 0;
-  const hint     = document.getElementById("required-hint");
-  if (!hint) return;
-  if (sessions > 0 && required > 0) {
-    const rate = Math.round(required / sessions * 100);
-    hint.textContent = `全${sessions}回中 ${required}回以上で認定（${rate}%）`;
-    hint.style.color = required > sessions ? "var(--red)" : "var(--muted)";
-    if (required > sessions) hint.textContent += "　⚠️ 講義回数を超えています";
-  } else {
-    hint.textContent = "";
-  }
-}
-
-// ── utils ────────────────────────────────────────────────────────
-function genCode() { return String(Math.floor(1000 + Math.random() * 9000)); }
-
-async function forceStopAll() {
-  const count = Object.keys(activeSes).length;
-  if (count === 0) { alert("現在受付中の科目はありません"); return; }
-  if (!confirm(`受付中の科目が${count}件あります。すべて強制終了しますか？`)) return;
-  await db.ref("activeSessions").remove();
-  alert("すべての受付を終了しました");
-}
-function getTeacherName(tid) {
-  if (!tid || tid === "admin") return "管理者";
-  const t = Object.values(TEACHERS).find(t => t.id === tid);
-  return t ? t.name : tid;
-}
-function cookieKey(courseId, idx) { return `registered_${courseId}_${idx}`; }
-function hasCookie(key) { return document.cookie.split(";").some(c => c.trim().startsWith(key + "=")); }
-function setCookie(key) {
-  // 180日間有効
-  const expires = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toUTCString();
-  document.cookie = `${key}=1; expires=${expires}; path=/; SameSite=Lax`;
-}
-function fmtTime(iso) { try { return new Date(iso).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"}); } catch{return "";} }
-function fmtDate(iso) { try { return new Date(iso).toLocaleDateString("ja-JP",{month:"numeric",day:"numeric"}); } catch{return "";} }
-function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-
-// ── 登録履歴確認（学生用） ──────────────────────────────────────
-function checkMyHistory() {
-  const no = document.getElementById("mc-no").value.trim();
-  const errEl = document.getElementById("mc-err");
-  errEl.classList.remove("show");
-
-  if (!no) { errEl.textContent = "学籍番号を入力してください"; errEl.classList.add("show"); return; }
-
-  // 全科目・全回をスキャンして該当学籍番号の登録を集める
-  const found = []; // { courseName, sessionIdx, time }
-  Object.entries(courses).forEach(([courseId, c]) => {
-    const courseAtt = allAttendance[courseId] || {};
-    Object.entries(courseAtt).forEach(([idx, sessionData]) => {
-      Object.values(sessionData).forEach(r => {
-        if (r.studentNo === no) {
-          found.push({ courseName: c.name, sessionIdx: Number(idx), time: r.time, totalSessions: c.sessions });
-        }
-      });
-    });
-  });
-
-  const resultsEl = document.getElementById("mc-results");
-  if (found.length === 0) {
-    resultsEl.innerHTML = `<div class="card"><div style="color:var(--muted);text-align:center;padding:12px 0;font-size:13px">この学籍番号での登録履歴は見つかりませんでした</div></div>`;
-    return;
-  }
-
-  // 科目ごとにグループ化
-  const byCourse = {};
-  found.forEach(f => {
-    if (!byCourse[f.courseName]) byCourse[f.courseName] = { total: f.totalSessions, sessions: [] };
-    byCourse[f.courseName].sessions.push(f);
-  });
-
-  resultsEl.innerHTML = Object.entries(byCourse).map(([courseName, data]) => {
-    const sorted = data.sessions.sort((a,b) => a.sessionIdx - b.sessionIdx);
-    const rows = sorted.map(s =>
-      `<tr><td>第${s.sessionIdx+1}回</td><td>${fmtDate(s.time)} ${fmtTime(s.time)}</td><td><span class="tag tag-green">登録済み</span></td></tr>`
-    ).join("");
-    return `<div class="card">
-      <div class="flex-row" style="margin-bottom:10px">
-        <span style="font-size:14px;font-weight:700">${esc(courseName)}</span>
-        <span class="tag tag-blue" style="margin-left:auto">${data.sessions.length} / ${data.total}回 出席</span>
+    if (received.length === 0) {
+      list.innerHTML = '';
+      emptyNote.textContent = 'まだコメントは届いていません。「最新の状態を確認する」で再確認できます。';
+      return;
+    }
+    emptyNote.textContent = '';
+    list.innerHTML = received.map(c => `
+      <div class="opinion-block">
+        <div>${escapeHtml(c.commentText)}</div>
+        <div class="comment-author">提出者：${escapeHtml(c.commenterName)}</div>
       </div>
-      <table>
-        <thead><tr><th>回</th><th>登録時刻</th><th>状態</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
-  }).join("");
+    `).join('');
+  });
+}
+
+function showWaiting(msg) {
+  els.opinionCard.classList.add('hidden');
+  els.commentCard.classList.add('hidden');
+  els.waitingCard.classList.remove('hidden');
+  document.getElementById('waiting-message').textContent = msg;
+}
+
+document.getElementById('refresh-btn').addEventListener('click', () => {
+  els.waitingCard.classList.add('hidden');
+  els.receivedCard.classList.add('hidden');
+  loadCurrentTheme();
+});
+
+document.getElementById('submit-opinion-btn').addEventListener('click', () => {
+  const text = document.getElementById('opinion-text').value.trim();
+  if (!text) { alert('意見を入力してください'); return; }
+  const btn = document.getElementById('submit-opinion-btn');
+  btn.disabled = true;
+  db.ref(`opinions/${currentThemeId}/${myKey}`).set({
+    text: text,
+    name: myName,
+    studentId: myStudentId,
+    submittedAt: firebase.database.ServerValue.TIMESTAMP
+  }).then(() => {
+    document.getElementById('opinion-status').innerHTML = '<span class="done-mark">提出しました。配信開始までお待ちください。</span>';
+    els.opinionCard.classList.add('hidden');
+    showWaiting('意見を提出済みです。配信が開始されるまでお待ちください。');
+  }).catch(err => {
+    alert('提出に失敗しました：' + err.message);
+    btn.disabled = false;
+  });
+});
+
+function checkAssignmentAndShowComments() {
+  db.ref(`assignments/${currentThemeId}/${myKey}`).once('value').then(asgSnap => {
+    const assignment = asgSnap.val();
+    if (!assignment || !assignment.targets) {
+      showWaiting('あなたへの配信がまだありません（意見を提出していない場合は配信対象になりません）。');
+      return;
+    }
+    db.ref(`comments/${currentThemeId}/${myKey}`).once('value').then(cmtSnap => {
+      const existing = cmtSnap.val() || {};
+      const remaining = assignment.targets.filter(t => !existing[t]);
+      if (remaining.length === 0) {
+        showWaiting('コメントを提出済みです。お疲れさまでした。');
+        return;
+      }
+      renderCommentForm(assignment.targets, existing);
+    });
+  });
+}
+
+function renderCommentForm(targetKeys, existing) {
+  els.commentCard.classList.remove('hidden');
+  const list = document.getElementById('comment-list');
+  list.innerHTML = '';
+
+  const fetches = targetKeys.map(tk =>
+    db.ref(`opinions/${currentThemeId}/${tk}`).once('value').then(s => ({ key: tk, opinion: s.val() }))
+  );
+
+  Promise.all(fetches).then(results => {
+    results.forEach((r, idx) => {
+      if (!r.opinion) return;
+      const block = document.createElement('div');
+      block.className = 'opinion-block';
+      const already = existing[r.key];
+      block.innerHTML = `
+        <div style="font-size:0.75rem; color:var(--muted); margin-bottom:6px;">配信された意見 ${idx + 1}（提出者：非公開）</div>
+        <div style="margin-bottom:12px;">${escapeHtml(r.opinion.text)}</div>
+        <label>あなたのコメント</label>
+        <textarea data-target="${r.key}" ${already ? 'disabled' : ''}>${already ? escapeHtml(already.commentText) : ''}</textarea>
+        ${already ? '<div class="comment-author">提出済み・提出者：' + escapeHtml(already.commenterName) + '</div>' : ''}
+      `;
+      list.appendChild(block);
+    });
+  });
+}
+
+document.getElementById('submit-comments-btn').addEventListener('click', () => {
+  const textareas = document.querySelectorAll('#comment-list textarea:not([disabled])');
+  const updates = {};
+  let emptyFound = false;
+  textareas.forEach(ta => {
+    const val = ta.value.trim();
+    if (!val) { emptyFound = true; return; }
+    const targetKey = ta.getAttribute('data-target');
+    updates[`comments/${currentThemeId}/${myKey}/${targetKey}`] = {
+      commentText: val,
+      commenterName: myName,
+      commenterStudentId: myStudentId,
+      submittedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+  });
+  if (emptyFound) { alert('未入力のコメントがあります。すべて入力してください。'); return; }
+  if (Object.keys(updates).length === 0) {
+    showWaiting('コメントを提出済みです。お疲れさまでした。');
+    return;
+  }
+  const btn = document.getElementById('submit-comments-btn');
+  btn.disabled = true;
+  db.ref().update(updates).then(() => {
+    els.commentCard.classList.add('hidden');
+    showWaiting('コメントを提出しました。お疲れさまでした。');
+  }).catch(err => {
+    alert('提出に失敗しました：' + err.message);
+    btn.disabled = false;
+  });
+});
+
+/* ===================================================================
+   管理画面ロジック（admin* というプレフィックスで学生側と名前の衝突を回避）
+   =================================================================== */
+function adminLog(msg) {
+  document.getElementById('admin-log').textContent = msg;
+}
+
+function adminGenThemeId() {
+  return 'theme_' + Date.now();
+}
+
+document.getElementById('create-theme-btn').addEventListener('click', () => {
+  const title = document.getElementById('new-theme-title').value.trim();
+  if (!title) { alert('テーマ文を入力してください'); return; }
+  const assignCount = parseInt(document.getElementById('assign-count').value, 10);
+
+  const themeId = adminGenThemeId();
+  const theme = {
+    title,
+    assignCount,
+    status: 'open',
+    createdAt: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  db.ref('themes/list/' + themeId).set(theme)
+    .then(() => db.ref('themes/current').set(themeId))
+    .then(() => {
+      document.getElementById('new-theme-title').value = '';
+      adminLog('テーマを作成し、意見募集を開始しました。');
+      adminLoadThemeList();
+      adminLoadCurrentTheme();
+    })
+    .catch(err => alert('作成に失敗しました：' + err.message));
+});
+
+function adminLoadCurrentTheme() {
+  db.ref('themes/current').once('value').then(snap => {
+    const themeId = snap.val();
+    const box = document.getElementById('current-theme-box');
+    if (!themeId) {
+      box.innerHTML = '<p class="small-note">現在進行中のテーマはありません。</p>';
+      return;
+    }
+    db.ref('themes/list/' + themeId).once('value').then(themeSnap => {
+      const theme = themeSnap.val();
+      adminRenderCurrentThemeBox(themeId, theme);
+    });
+  });
+}
+
+function adminStatusBadge(status) {
+  if (status === 'open') return '<span class="badge-status badge-open">意見募集中</span>';
+  if (status === 'distributed') return '<span class="badge-status badge-distributed">配信済み・コメント受付中</span>';
+  return '<span class="badge-status badge-closed">終了</span>';
+}
+
+function adminRenderCurrentThemeBox(themeId, theme) {
+  const box = document.getElementById('current-theme-box');
+  if (!theme) { box.innerHTML = '<p class="small-note">テーマが見つかりません。</p>'; return; }
+
+  Promise.all([
+    db.ref('opinions/' + themeId).once('value'),
+    db.ref('comments/' + themeId).once('value')
+  ]).then(([oppSnap, cmtSnap]) => {
+    const opinions = oppSnap.val() || {};
+    const oppCount = Object.keys(opinions).length;
+
+    const comments = cmtSnap.val() || {};
+    let commentTotal = 0;
+    Object.values(comments).forEach(perStudent => {
+      commentTotal += Object.keys(perStudent).length;
+    });
+    const expectedComments = theme.status === 'distributed' || theme.status === 'closed'
+      ? oppCount * theme.assignCount : null;
+
+    box.innerHTML = `
+      <p><strong>${escapeHtml(theme.title)}</strong> ${adminStatusBadge(theme.status)}</p>
+      <div class="stat">
+        <div class="stat-box"><div class="num">${oppCount}</div><div class="label">意見の提出数</div></div>
+        <div class="stat-box"><div class="num">${commentTotal}${expectedComments !== null ? ' / ' + expectedComments : ''}</div><div class="label">コメント提出数</div></div>
+      </div>
+      <div class="row" style="margin-top:16px;">
+        ${theme.status === 'open' ? `<button id="distribute-btn">配信を実行する（${oppCount}件の意見を1人${theme.assignCount}件ずつ配信）</button>` : ''}
+        ${theme.status === 'distributed' ? `<button id="close-btn" class="danger">このテーマを終了する</button>` : ''}
+        ${oppCount > 0 ? `<button id="export-current-btn" class="secondary">CSVをダウンロード</button>` : ''}
+      </div>
+      <p class="small-note" id="distribute-note"></p>
+    `;
+
+    if (theme.status === 'open') {
+      document.getElementById('distribute-btn').addEventListener('click', () => {
+        adminRunDistribution(themeId, theme, opinions);
+      });
+    }
+    if (theme.status === 'distributed') {
+      document.getElementById('close-btn').addEventListener('click', () => {
+        db.ref('themes/list/' + themeId + '/status').set('closed').then(() => {
+          adminLog('テーマを終了しました。');
+          adminLoadCurrentTheme(); adminLoadThemeList();
+        });
+      });
+    }
+    if (oppCount > 0) {
+      document.getElementById('export-current-btn').addEventListener('click', () => {
+        adminExportThemeCSV(themeId, theme);
+      });
+    }
+  });
+}
+
+function adminRunDistribution(themeId, theme, opinions) {
+  const keys = Object.keys(opinions);
+  const n = keys.length;
+  const assignCount = theme.assignCount;
+
+  if (n < assignCount + 1) {
+    alert(`配信には最低 ${assignCount + 1} 人分の意見が必要です（現在 ${n} 件）。`);
+    return;
+  }
+
+  const shuffled = [...keys];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  const updates = {};
+  for (let i = 0; i < n; i++) {
+    const targets = [];
+    for (let offset = 1; offset <= assignCount; offset++) {
+      targets.push(shuffled[(i + offset) % n]);
+    }
+    updates[`assignments/${themeId}/${shuffled[i]}`] = { targets };
+  }
+  updates[`themes/list/${themeId}/status`] = 'distributed';
+  updates[`themes/list/${themeId}/distributedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+  document.getElementById('distribute-note').textContent = '配信を実行中…';
+  db.ref().update(updates).then(() => {
+    adminLog(`配信を実行しました（${n}人 × ${assignCount}件）。`);
+    adminLoadCurrentTheme();
+    adminLoadThemeList();
+  }).catch(err => alert('配信に失敗しました：' + err.message));
+}
+
+function adminLoadThemeList() {
+  db.ref('themes/list').once('value').then(snap => {
+    const all = snap.val() || {};
+    const list = document.getElementById('theme-list');
+    const ids = Object.keys(all).sort((a, b) => (all[b].createdAt || 0) - (all[a].createdAt || 0));
+    if (ids.length === 0) {
+      list.innerHTML = '<p class="small-note">まだテーマがありません。</p>';
+      return;
+    }
+    list.innerHTML = ids.map(id => {
+      const t = all[id];
+      return `<div class="theme-item">
+        <span>${escapeHtml(t.title)}</span>
+        <span style="display:flex; align-items:center; gap:10px;">
+          ${adminStatusBadge(t.status)}
+          <button class="secondary export-btn" data-theme-id="${id}" style="padding:6px 12px; font-size:0.78rem;">CSV</button>
+          <button class="danger delete-btn" data-theme-id="${id}" style="padding:6px 12px; font-size:0.78rem;">削除</button>
+        </span>
+      </div>`;
+    }).join('');
+
+    list.querySelectorAll('.export-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-theme-id');
+        adminExportThemeCSV(id, all[id]);
+      });
+    });
+    list.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-theme-id');
+        adminDeleteTheme(id, all[id]);
+      });
+    });
+  });
+}
+
+function adminDeleteTheme(themeId, theme) {
+  const title = theme ? theme.title : themeId;
+  if (!confirm(`「${title}」を削除します。意見・コメントのデータもすべて削除され、元に戻せません。本当に削除しますか？`)) {
+    return;
+  }
+  const updates = {};
+  updates[`themes/list/${themeId}`] = null;
+  updates[`opinions/${themeId}`] = null;
+  updates[`assignments/${themeId}`] = null;
+  updates[`comments/${themeId}`] = null;
+
+  db.ref().update(updates).then(() => {
+    return db.ref('themes/current').once('value');
+  }).then(snap => {
+    if (snap.val() === themeId) {
+      return db.ref('themes/current').set(null);
+    }
+  }).then(() => {
+    adminLog('テーマを削除しました。');
+    adminLoadCurrentTheme();
+    adminLoadThemeList();
+  }).catch(err => alert('削除に失敗しました：' + err.message));
+}
+
+function adminExportThemeCSV(themeId, theme) {
+  Promise.all([
+    db.ref('opinions/' + themeId).once('value'),
+    db.ref('comments/' + themeId).once('value')
+  ]).then(([oppSnap, cmtSnap]) => {
+    const opinions = oppSnap.val() || {};
+    const comments = cmtSnap.val() || {};
+
+    const opinionRows = Object.keys(opinions).map(key => {
+      const o = opinions[key];
+      return [o.studentId || key, o.name || '', o.text || '', adminFormatTs(o.submittedAt)];
+    });
+    adminDownloadCSV(
+      adminSanitizeFilename(theme.title) + '_意見一覧.csv',
+      adminToCSV(['学籍番号', '氏名', '意見内容', '提出日時'], opinionRows)
+    );
+
+    const commentRows = [];
+    Object.keys(comments).forEach(commenterKey => {
+      const perTarget = comments[commenterKey] || {};
+      Object.keys(perTarget).forEach(targetKey => {
+        const c = perTarget[targetKey];
+        const targetOpinion = opinions[targetKey] || {};
+        commentRows.push([
+          c.commenterStudentId || commenterKey,
+          c.commenterName || '',
+          targetOpinion.studentId || targetKey,
+          targetOpinion.name || '',
+          c.commentText || '',
+          adminFormatTs(c.submittedAt)
+        ]);
+      });
+    });
+    setTimeout(() => {
+      adminDownloadCSV(
+        adminSanitizeFilename(theme.title) + '_コメント一覧.csv',
+        adminToCSV(['コメント記載者学籍番号', 'コメント記載者氏名', '対象学籍番号', '対象氏名', 'コメント内容', '提出日時'], commentRows)
+      );
+    }, 300);
+
+    adminLog('CSVをダウンロードしました。');
+  }).catch(err => alert('CSV出力に失敗しました：' + err.message));
+}
+
+function adminFormatTs(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function adminSanitizeFilename(name) {
+  return (name || 'theme').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
+}
+
+function adminCsvEscape(val) {
+  const s = String(val ?? '');
+  if (/[",\n]/.test(s)) { return '"' + s.replace(/"/g, '""') + '"'; }
+  return s;
+}
+
+function adminToCSV(headers, rows) {
+  const lines = [headers.map(adminCsvEscape).join(',')];
+  rows.forEach(row => lines.push(row.map(adminCsvEscape).join(',')));
+  return lines.join('\r\n');
+}
+
+function adminDownloadCSV(filename, content) {
+  const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 </script>
-</div><!-- /app-screen -->
 </body>
 </html>
