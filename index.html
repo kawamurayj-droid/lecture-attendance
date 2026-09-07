@@ -926,7 +926,6 @@ function exportUPCSV() {
   const rows   = window._lastRecords || [];
   const course = courses[sessionCourseId];
   if (!course) return;
-  if (rows.length === 0) { alert("この回の出席者がいません"); return; }
 
   const courseCode = course.courseCode || "";
   const period     = course.period     || "";
@@ -934,7 +933,8 @@ function exportUPCSV() {
   // ヘッダー：UPシステムの仕様に合わせた列名・囲みなし
   const header = "\uFEFF授業コード,授業科目,学籍番号,氏名,学生氏名＿カナ,学生氏名＿英語,実施日,時限,出欠区分";
 
-  const body = rows.map(r => {
+  // 出席・遅刻の行を生成
+  const presentRows = rows.map(r => {
     const d = r.time ? new Date(r.time) : new Date();
     const isValid = !isNaN(d.getTime());
     const dd = isValid ? d : new Date();
@@ -943,8 +943,28 @@ function exportUPCSV() {
     return `${courseCode},${course.name},${r.studentNo},,,,${implDate},${period},${upStatus}`;
   });
 
+  // 名簿がある場合は欠席者（3）も追加
+  let absentRows = [];
+  if (currentRoster.length > 0) {
+    // 出席・遅刻済みの学籍番号セット
+    const presentNos = new Set(rows.map(r => r.studentNo));
+    // 実施日：出席者の登録時刻から取得（出席者がいない場合は今日）
+    const baseDate = rows.length > 0 && rows[0].time
+      ? new Date(rows[0].time)
+      : new Date();
+    const implDate = `${baseDate.getFullYear()}/${baseDate.getMonth()+1}/${baseDate.getDate()}`;
+
+    absentRows = currentRoster
+      .filter(r => !presentNos.has(r.studentNo))
+      .map(r => `${courseCode},${course.name},${r.studentNo},,,,${implDate},${period},3`);
+  }
+
+  if (presentRows.length === 0 && absentRows.length === 0) {
+    alert("出席者も名簿もありません"); return;
+  }
+
   // 改行コードはLF・末尾改行なし
-  const csv = [header, ...body].join("\n").trimEnd();
+  const csv = [header, ...presentRows, ...absentRows].join("\n").trimEnd();
   const a   = document.createElement("a");
   a.href    = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
   a.download = `UP出席_${course.name}_第${sessionSelIdx+1}回.csv`;
