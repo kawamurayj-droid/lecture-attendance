@@ -142,7 +142,9 @@
       ⚠️ 共有のパソコンで利用した場合は、使い終わったら必ず右上の「🔓 ログアウト」を押してください。
     </div>
     <p style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px">モードを選択してください</p>
-    <div style="display:flex;gap:14px;flex-wrap:wrap">
+
+    <!-- 学生向けボタン（常に表示） -->
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px">
       <button class="mode-btn" onclick="showPage('student')" style="flex:1;min-width:140px">
         <div class="icon">🎓</div>
         <div class="label">出席登録</div>
@@ -152,6 +154,19 @@
         <div class="icon">🔍</div>
         <div class="label">登録履歴確認</div>
         <div class="sub">CHECK</div>
+      </button>
+    </div>
+
+    <!-- 教員向けボタン（教員ログイン時のみ表示） -->
+    <div id="teacher-mode-btn" style="display:none">
+      <div style="border-top:1px solid var(--border);margin:8px 0 14px;"></div>
+      <p style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">教員メニュー</p>
+      <button class="mode-btn" onclick="showPage('list')" style="width:100%;text-align:left;padding:18px 20px;display:flex;align-items:center;gap:14px">
+        <div class="icon" style="font-size:22px;margin:0">📋</div>
+        <div>
+          <div class="label">教員管理画面</div>
+          <div class="sub" style="margin-top:4px">科目管理・出席受付・データ確認</div>
+        </div>
       </button>
     </div>
   </div>
@@ -375,7 +390,7 @@ auth.onAuthStateChanged(async user => {
       currentTeacher = teacherEntry
         ? { id: teacherEntry[1].id, name: teacherEntry[1].name }
         : { id: emailKey, name: user.displayName || user.email };
-      showPage("list");
+      showPage("home");
     } else {
       // 学生：学生画面のみ
       currentTeacher = null;
@@ -449,6 +464,11 @@ function showPage(name, extra) {
   if (name === "edit")    openEdit(extra);
   if (name === "session") openSession(extra);
   if (name === "student") { renderStudentCourses(); renderStudentStatus(); loadStudentHistory(); }
+  if (name === "home") {
+    // 教員ログイン中は教員メニューボタンを表示
+    const teacherBtn = document.getElementById("teacher-mode-btn");
+    if (teacherBtn) teacherBtn.style.display = currentTeacher ? "" : "none";
+  }
   if (name === "mycheck") {
     document.getElementById("mc-err").classList.remove("show");
     document.getElementById("mc-results").innerHTML = "";
@@ -466,7 +486,6 @@ function goBack() {
              : "home";
   stopTimerLoop();
   if (attUnsubscribe) { attUnsubscribe(); attUnsubscribe = null; }
-  if (dest === "home") currentTeacher = null;
   showPage(dest);
 }
 
