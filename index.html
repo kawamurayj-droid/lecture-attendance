@@ -86,6 +86,10 @@
 
   /* ── session ── */
   .session-tabs { display: flex; flex-wrap: wrap; gap: 7px; }
+  .course-card.dragging { opacity: 0.4; border: 2px dashed var(--accent); }
+  .course-card.drag-over { border: 2px solid var(--accent); background: var(--bg3); transform: scale(1.01); }
+  .drag-handle { cursor: grab; color: var(--muted); font-size: 16px; padding: 0 6px; user-select: none; }
+  .drag-handle:active { cursor: grabbing; }
   .session-tab  { padding: 7px 14px; border-radius: 7px; border: none; cursor: pointer; font-size: 11px; font-weight: 700; font-family: inherit; }
   .session-tab.active   { background: var(--accent); color: #fff; }
   .session-tab.inactive { background: var(--bg3); color: var(--sub); border: 1px solid var(--border); }
@@ -582,11 +586,13 @@ function renderCourseList() {
     el.innerHTML = `<div class="alert alert-info show">科目が登録されていません。「科目追加」から登録してください。</div>`;
     return;
   }
+  // sortOrder でソート
+  entries.sort(([,a],[,b]) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999));
+
   el.innerHTML = entries.map(([id, c]) => {
     const active    = activeSes[id];
     const attData   = allAttendance[id] || {};
-    // 回ごとの出席者数を集計
-    const sessionCounts = Array.from({length: c.sessions}, (_, i) => {
+    const sessionCounts = Array.from({length: c.sessions||0}, (_, i) => {
       const n = attData[i] ? Object.keys(attData[i]).length : 0;
       return n > 0 ? `第${i+1}回:${n}名` : null;
     }).filter(Boolean);
@@ -597,27 +603,84 @@ function renderCourseList() {
           <div style="display:flex;flex-wrap:wrap;gap:6px">${sessionCounts.map(s=>`<span style="font-size:11px;color:var(--sub)">${s}</span>`).join('<span style="color:var(--border)">／</span>')}</div>
         </div>`
       : `<div style="margin-top:10px;font-size:11px;color:var(--muted)">出席データなし</div>`;
-    return `<div class="course-card">
-      <div class="course-name">${esc(c.name)}</div>
-      <div class="course-meta">
-        <span class="tag tag-purple">🏫 ${esc(c.room)}</span>
-        <span class="tag tag-green">👤 ${esc(c.instructor)}</span>
-        <span class="tag tag-yellow">📅 全${c.sessions}回</span>
-        ${c.courseCode ? `<span class="tag" style="background:#88888822;color:#666;border:1px solid #88888833">📑 ${esc(c.courseCode)}</span>` : ""}
-        ${c.period ? `<span class="tag" style="background:#88888822;color:#666;border:1px solid #88888833">🕐 ${c.period}限</span>` : ""}
-        ${c.requiredSessions ? `<span class="tag" style="background:#4f5bd522;color:var(--accent);border:1px solid #4f5bd533">✅ ${c.requiredSessions}回以上で認定</span>` : ""}
-        ${c.lateMinutes ? `<span class="tag tag-yellow">⏱ ${c.lateMinutes}分超で遅刻</span>` : ""}
-        ${active ? `<span class="tag tag-red">● 受付中（第${Number(activeSes[id].sessionIdx)+1}回）</span>` : ""}
-        ${currentTeacher?.id === "admin" ? `<span class="tag" style="background:#88888822;color:#888;border:1px solid #88888833">🔑 ${(c.teacherIds||[c.teacherId||""]).map(tid=>getTeacherName(tid)).join("・")}</span>` : ""}
-      </div>
-      ${attSummary}
-      <div class="course-actions" style="margin-top:12px">
-        <button class="btn btn-pri btn-sm" onclick="showPage('session','${id}')">セッション管理</button>
-        <button class="btn btn-ghost btn-sm" onclick="showPage('edit','${id}')">編集</button>
-        <button class="btn btn-del btn-sm" onclick="deleteCourse('${id}','${esc(c.name)}')">削除</button>
+    return `<div class="course-card" draggable="true" data-id="${id}"
+        ondragstart="onDragStart(event,'${id}')"
+        ondragover="onDragOver(event)"
+        ondragleave="onDragLeave(event)"
+        ondrop="onDrop(event,'${id}')">
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <span class="drag-handle" title="ドラッグして並び替え">⠿</span>
+        <div style="flex:1">
+          <div class="course-name">${esc(c.name)}</div>
+          <div class="course-meta">
+            ${c.room ? `<span class="tag tag-purple">🏫 ${esc(c.room)}</span>` : ""}
+            ${c.instructor ? `<span class="tag tag-green">👤 ${esc(c.instructor)}</span>` : ""}
+            ${c.sessions ? `<span class="tag tag-yellow">📅 全${c.sessions}回</span>` : ""}
+            ${c.courseCode ? `<span class="tag" style="background:#88888822;color:#666;border:1px solid #88888833">📑 ${esc(c.courseCode)}</span>` : ""}
+            ${c.period ? `<span class="tag" style="background:#88888822;color:#666;border:1px solid #88888833">🕐 ${c.period}限</span>` : ""}
+            ${c.requiredSessions ? `<span class="tag" style="background:#4f5bd522;color:var(--accent);border:1px solid #4f5bd533">✅ ${c.requiredSessions}回以上で認定</span>` : ""}
+            ${c.lateMinutes ? `<span class="tag tag-yellow">⏱ ${c.lateMinutes}分超で遅刻</span>` : ""}
+            ${active ? `<span class="tag tag-red">● 受付中（第${Number(activeSes[id].sessionIdx)+1}回）</span>` : ""}
+            ${currentTeacher?.id === "admin" ? `<span class="tag" style="background:#88888822;color:#888;border:1px solid #88888833">🔑 ${(c.teacherIds||[c.teacherId||""]).map(tid=>getTeacherName(tid)).join("・")}</span>` : ""}
+          </div>
+          ${attSummary}
+          <div class="course-actions" style="margin-top:12px">
+            <button class="btn btn-pri btn-sm" onclick="showPage('session','${id}')">セッション管理</button>
+            <button class="btn btn-ghost btn-sm" onclick="showPage('edit','${id}')">編集</button>
+            <button class="btn btn-del btn-sm" onclick="deleteCourse('${id}','${esc(c.name)}')">削除</button>
+          </div>
+        </div>
       </div>
     </div>`;
   }).join("");
+}
+
+// ── ドラッグ＆ドロップ並び替え ────────────────────────────────────
+let dragSrcId = null;
+
+function onDragStart(e, id) {
+  dragSrcId = id;
+  e.target.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move";
+}
+
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  const card = e.currentTarget;
+  card.classList.add("drag-over");
+}
+
+function onDragLeave(e) {
+  e.currentTarget.classList.remove("drag-over");
+}
+
+async function onDrop(e, targetId) {
+  e.preventDefault();
+  const card = e.currentTarget;
+  card.classList.remove("drag-over");
+  document.querySelectorAll(".course-card").forEach(c => c.classList.remove("dragging"));
+
+  if (!dragSrcId || dragSrcId === targetId) return;
+
+  // 現在の表示順を取得してsortOrderを再計算
+  const el = document.getElementById("course-list-body");
+  const cards = Array.from(el.querySelectorAll(".course-card[data-id]"));
+  const orderedIds = cards.map(c => c.dataset.id);
+
+  // dragSrcId を targetId の位置に移動
+  const srcIdx = orderedIds.indexOf(dragSrcId);
+  const tgtIdx = orderedIds.indexOf(targetId);
+  orderedIds.splice(srcIdx, 1);
+  orderedIds.splice(tgtIdx, 0, dragSrcId);
+
+  // Firebaseに新しい順序を保存
+  const updates = {};
+  orderedIds.forEach((id, i) => {
+    updates[`courses/${id}/sortOrder`] = i;
+  });
+  await db.ref().update(updates);
+  dragSrcId = null;
 }
 
 // ── 科目編集 ──────────────────────────────────────────────────────
@@ -658,10 +721,10 @@ async function saveCourse() {
   const name       = document.getElementById("edit-name").value.trim();
   const room       = document.getElementById("edit-room").value.trim();
   const instructor = document.getElementById("edit-instructor").value.trim();
-  const sessions   = parseInt(document.getElementById("edit-sessions").value);
+  const sessions   = parseInt(document.getElementById("edit-sessions").value) || 15;
   const id         = document.getElementById("edit-id").value;
-  if (!name || !room || !instructor || !sessions) {
-    showEditErr("すべての項目を入力してください"); return;
+  if (!name) {
+    showEditErr("科目名は必須です"); return;
   }
   // 担当教員IDリストを決定
   let teacherIds;
@@ -679,7 +742,10 @@ async function saveCourse() {
   const lateMinutes = lateVal ? Number(lateVal) : null;
   const courseCode = document.getElementById("edit-coursecode").value.trim();
   const period     = document.getElementById("edit-period").value;
-  const data = { name, room, instructor, sessions, teacherIds, courseCode, period };
+  // 並び順を設定（新規は既存の末尾、編集時は維持）
+  const existingOrder = id ? (courses[id]?.sortOrder ?? 9999) : 9999;
+  const sortOrder = id ? existingOrder : Object.keys(courses).length;
+  const data = { name, room: room||"", instructor: instructor||"", sessions, teacherIds, courseCode, period, sortOrder };
   if (requiredSessions) data.requiredSessions = requiredSessions;
   else data.requiredSessions = null;
   if (lateMinutes) data.lateMinutes = lateMinutes;
