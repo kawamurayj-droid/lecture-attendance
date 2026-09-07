@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-database-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-auth-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -190,7 +191,7 @@
       <p class="sec" style="margin:0">科目一覧</p>
       <span id="teacher-badge" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
       <div style="margin-left:auto;display:flex;gap:8px">
-        <button class="btn btn-ghost btn-sm" id="all-rate-btn" onclick="exportAllRateCSV()" style="display:none">📊 全科目出席率CSV</button>
+        <button class="btn btn-ghost btn-sm" id="all-rate-btn" onclick="exportAllRateCSV()" style="display:none">📊 全科目出席率（Excel）</button>
         <button class="btn btn-del btn-sm" id="force-stop-btn" onclick="forceStopAll()" style="display:none">⏹ 全受付強制終了</button>
         <button class="btn btn-pri" onclick="showPage('edit',null)">＋ 科目追加</button>
       </div>
@@ -923,18 +924,18 @@ function exportRateCSV() {
   a.click();
 }
 
-// ── 管理者用：全科目出席率一括ダウンロード ───────────────────────
+// ── 管理者用：全科目出席率一括ダウンロード（Excel） ─────────────
 async function exportAllRateCSV() {
   if (currentTeacher?.id !== "admin") { alert("管理者のみ使用できます"); return; }
 
-  // 全科目の出席データをFirebaseから取得
   const snap = await db.ref("attendance").once("value");
   const allAtt = snap.val() || {};
 
-  // 全科目分のCSVをZIP代わりに連結して1ファイルに
-  const sections = [];
   const courseEntries = Object.entries(courses);
   if (courseEntries.length === 0) { alert("科目がありません"); return; }
+
+  const wb = XLSX.utils.book_new();
+  let hasData = false;
 
   courseEntries.forEach(([courseId, course]) => {
     const total    = course.sessions;
@@ -951,36 +952,46 @@ async function exportAllRateCSV() {
     });
 
     if (Object.keys(studentMap).length === 0) return; // データなしはスキップ
+    hasData = true;
 
-    const roundHeaders = Array.from({length: total}, (_, i) => `第${i+1}回`).join(",");
-    const certCol      = required ? ",認定" : "";
+    // ヘッダー行
+    const roundHeaders = Array.from({length: total}, (_, i) => `第${i+1}回`);
+    const certHeader   = required ? ["認定"] : [];
+    const header       = ["学籍番号", "出席回数", "総回数", "出席率", ...certHeader, ...roundHeaders];
 
-    // 科目名を見出しとして追加
-    sections.push(`【${course.name}】（全${total}回${required ? `・認定ライン${required}回` : ""}）`);
-    sections.push(`学籍番号,出席回数,総回数,出席率${certCol},${roundHeaders}`);
-
-    Object.entries(studentMap)
+    // データ行
+    const rows = Object.entries(studentMap)
       .sort(([a],[b]) => a.localeCompare(b))
-      .forEach(([no, s]) => {
-        const count   = s.attended.size;
-        const rate    = Math.round(count / total * 100);
-        const cert    = required ? (count >= required ? "○" : "×") : "";
-        const certVal = required ? `,${cert}` : "";
-        const rounds  = Array.from({length: total}, (_, i) => s.attended.has(i) ? "○" : "―").join(",");
-        sections.push(`${no},${count},${total},${rate}%${certVal},${rounds}`);
+      .map(([no, s]) => {
+        const count  = s.attended.size;
+        const rate   = Math.round(count / total * 100) + "%";
+        const cert   = required ? (count >= required ? "○" : "×") : null;
+        const rounds = Array.from({length: total}, (_, i) => s.attended.has(i) ? "○" : "―");
+        return cert !== null
+          ? [no, count, total, rate, cert, ...rounds]
+          : [no, count, total, rate, ...rounds];
       });
 
-    sections.push(""); // 科目間の空行
+    const wsData = [header, ...rows];
+    const ws     = XLSX.utils.aoa_to_sheet(wsData);
+
+    // 列幅を設定
+    ws['!cols'] = [
+      {wch: 12}, {wch: 8}, {wch: 8}, {wch: 8},
+      ...(required ? [{wch: 6}] : []),
+      ...Array(total).fill({wch: 6}),
+    ];
+
+    // シート名は科目名（31文字制限）
+    const sheetName = course.name.substring(0, 31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
   });
 
-  if (sections.length === 0) { alert("出席データがありません"); return; }
+  if (!hasData) { alert("出席データがありません"); return; }
 
-  const csv = "\uFEFF" + sections.join("\n");
-  const a   = document.createElement("a");
-  a.href    = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
   const today = new Date();
-  a.download = `全科目出席率_${today.getFullYear()}${today.getMonth()+1}${today.getDate()}.csv`;
-  a.click();
+  const fname = `全科目出席率_${today.getFullYear()}${today.getMonth()+1}${today.getDate()}.xlsx`;
+  XLSX.writeFile(wb, fname);
 }
 
 // ── 学生画面 ──────────────────────────────────────────────────────
