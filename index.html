@@ -366,7 +366,8 @@ auth.onAuthStateChanged(async user => {
     if (!listenersAttached) { attachDataListeners(); listenersAttached = true; }
 
     // Firebaseのteachersリストで教員かどうか確認
-    const emailKey = user.email.replace(/\./g, "_").replace("@", "_");
+    // キー形式：ドットをアンダースコアに変換（@はそのまま）
+    const emailKey = user.email.replace(/\./g, "_");
     const snap = await db.ref(`teachers/${emailKey}`).once("value");
     if (snap.val() === true) {
       // 教員：メールアドレスから教員情報を自動設定
