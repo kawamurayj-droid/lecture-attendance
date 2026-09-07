@@ -192,6 +192,9 @@
       <span id="teacher-badge" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
       <div style="margin-left:auto;display:flex;gap:8px">
         <button class="btn btn-ghost btn-sm" id="all-rate-btn" onclick="exportAllRateCSV()" style="display:none">📊 全科目出席率（Excel）</button>
+        <button class="btn btn-ghost btn-sm" id="backup-btn" onclick="exportBackup()" style="display:none">💾 バックアップ</button>
+        <button class="btn btn-ghost btn-sm" id="restore-btn" onclick="document.getElementById('restore-file').click()" style="display:none">📂 復元</button>
+        <input type="file" id="restore-file" accept=".json" style="display:none" onchange="importBackup(this)">
         <button class="btn btn-del btn-sm" id="force-stop-btn" onclick="forceStopAll()" style="display:none">⏹ 全受付強制終了</button>
         <button class="btn btn-pri" onclick="showPage('edit',null)">＋ 科目追加</button>
       </div>
@@ -545,6 +548,12 @@ function renderCourseList() {
   // 管理者のみ全科目出席率CSVボタンを表示
   const allRateBtn = document.getElementById("all-rate-btn");
   if (allRateBtn) allRateBtn.style.display = currentTeacher?.id === "admin" ? "" : "none";
+
+  // バックアップ・復元ボタン（全教員に表示）
+  const backupBtn  = document.getElementById("backup-btn");
+  const restoreBtn = document.getElementById("restore-btn");
+  if (backupBtn)  backupBtn.style.display  = currentTeacher ? "" : "none";
+  if (restoreBtn) restoreBtn.style.display = currentTeacher ? "" : "none";
 
   // 管理者は全科目、教員は自分の科目だけ
   const entries = Object.entries(courses).filter(([id, c]) => {
@@ -1232,6 +1241,118 @@ function updateRequiredHint() {
 
 // ── utils ────────────────────────────────────────────────────────
 function genCode() { return String(Math.floor(1000 + Math.random() * 9000)); }
+
+// ── バックアップ・復元 ───────────────────────────────────────────
+async function exportBackup() {
+  const isAdmin = currentTeacher?.id === "admin";
+
+  // 対象科目IDを絞り込む
+  const targetCourseIds = Object.entries(courses)
+    .filter(([id, c]) => {
+      if (isAdmin) return true;
+      const ids = c.teacherIds || (c.teacherId ? [c.teacherId] : []);
+      return ids.includes(currentTeacher?.id);
+    })
+    .map(([id]) => id);
+
+  if (targetCourseIds.length === 0) { alert("バックアップ対象の科目がありません"); return; }
+
+  // 対象科目の出席データを取得
+  const attSnap = await db.ref("attendance").once("value");
+  const allAtt  = attSnap.val() || {};
+  const lockSnap = await db.ref("attendance_lock").once("value");
+  const allLock  = lockSnap.val() || {};
+
+  // 対象科目のデータだけ抽出
+  const backupCourses = {};
+  const backupAtt     = {};
+  const backupLock    = {};
+  targetCourseIds.forEach(id => {
+    if (courses[id])  backupCourses[id] = courses[id];
+    if (allAtt[id])   backupAtt[id]     = allAtt[id];
+    if (allLock[id])  backupLock[id]    = allLock[id];
+  });
+
+  const backup = {
+    version:    "1.0",
+    exportedAt: new Date().toISOString(),
+    exportedBy: currentTeacher?.name || "不明",
+    isAdmin,
+    courses:          backupCourses,
+    attendance:       backupAtt,
+    attendance_lock:  backupLock,
+  };
+
+  const json = JSON.stringify(backup, null, 2);
+  const a    = document.createElement("a");
+  a.href     = URL.createObjectURL(new Blob([json], {type:"application/json"}));
+  const today = new Date();
+  a.download = `backup_${today.getFullYear()}${String(today.getMonth()+1).padStart(2,"0")}${String(today.getDate()).padStart(2,"0")}.json`;
+  a.click();
+}
+
+async function importBackup(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = ""; // リセット
+
+  const text = await file.text();
+  let backup;
+  try {
+    backup = JSON.parse(text);
+  } catch(e) {
+    alert("ファイルの読み込みに失敗しました。正しいバックアップファイルを選択してください。"); return;
+  }
+
+  // バージョン確認
+  if (!backup.version || !backup.courses) {
+    alert("このファイルはバックアップファイルではありません。"); return;
+  }
+
+  const courseCount = Object.keys(backup.courses).length;
+  const attCount    = Object.values(backup.attendance || {})
+    .reduce((sum, s) => sum + Object.values(s).reduce((s2, r) => s2 + Object.keys(r).length, 0), 0);
+
+  const msg = `以下のデータを復元します。既存データは上書きされます。
+
+` +
+    `バックアップ日時：${new Date(backup.exportedAt).toLocaleString("ja-JP")}
+` +
+    `作成者：${backup.exportedBy}
+` +
+    `科目数：${courseCount}件
+` +
+    `出席レコード：${attCount}件
+
+` +
+    `続行しますか？`;
+
+  if (!confirm(msg)) return;
+
+  try {
+    // 科目データを復元
+    const updates = {};
+    Object.entries(backup.courses).forEach(([id, c]) => {
+      updates[`courses/${id}`] = c;
+    });
+    // 出席データを復元
+    Object.entries(backup.attendance || {}).forEach(([courseId, sessions]) => {
+      updates[`attendance/${courseId}`] = sessions;
+    });
+    // ロックデータを復元
+    Object.entries(backup.attendance_lock || {}).forEach(([courseId, sessions]) => {
+      updates[`attendance_lock/${courseId}`] = sessions;
+    });
+
+    await db.ref().update(updates);
+    alert(`復元が完了しました。
+科目：${courseCount}件
+出席レコード：${attCount}件`);
+    renderCourseList();
+  } catch(e) {
+    alert("復元に失敗しました: " + e.message);
+  }
+}
 
 async function forceStopAll() {
   const count = Object.keys(activeSes).length;
