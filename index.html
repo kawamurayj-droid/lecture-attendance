@@ -142,21 +142,16 @@
       ⚠️ 共有のパソコンで利用した場合は、使い終わったら必ず右上の「🔓 ログアウト」を押してください。
     </div>
     <p style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px">モードを選択してください</p>
-    <div class="mode-grid">
-      <button class="mode-btn" onclick="showPage('student')">
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+      <button class="mode-btn" onclick="showPage('student')" style="flex:1;min-width:140px">
         <div class="icon">🎓</div>
         <div class="label">出席登録</div>
         <div class="sub">STUDENT</div>
       </button>
-      <button class="mode-btn" onclick="showPage('mycheck')">
+      <button class="mode-btn" onclick="showPage('mycheck')" style="flex:1;min-width:140px">
         <div class="icon">🔍</div>
         <div class="label">登録履歴確認</div>
         <div class="sub">CHECK</div>
-      </button>
-      <button class="mode-btn" onclick="showPage('pin')">
-        <div class="icon">📋</div>
-        <div class="label">教員管理</div>
-        <div class="sub">INSTRUCTOR</div>
       </button>
     </div>
   </div>
@@ -363,16 +358,32 @@ googleProvider.setCustomParameters({ hd: "nbu.ac.jp" }); // NBUドメインを�
 let currentUser = null; // ログイン済みならFirebaseのuser情報が入る
 let listenersAttached = false;
 
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async user => {
   const logoutBtn = document.getElementById("header-logout-btn");
   if (user && user.email && user.email.endsWith("@nbu.ac.jp")) {
     currentUser = user;
     logoutBtn.style.display = "";
     if (!listenersAttached) { attachDataListeners(); listenersAttached = true; }
-    showPage("home");
+
+    // Firebaseのteachersリストで教員かどうか確認
+    const emailKey = user.email.replace(/\./g, "_").replace("@", "_");
+    const snap = await db.ref(`teachers/${emailKey}`).once("value");
+    if (snap.val() === true) {
+      // 教員：メールアドレスから教員情報を自動設定
+      const teacherEntry = Object.entries(TEACHERS).find(([,t]) => t.email === user.email);
+      currentTeacher = teacherEntry
+        ? { id: teacherEntry[1].id, name: teacherEntry[1].name }
+        : { id: emailKey, name: user.displayName || user.email };
+      showPage("list");
+    } else {
+      // 学生：学生画面のみ
+      currentTeacher = null;
+      showPage("home");
+    }
   } else {
     currentUser = null;
-    if (user) auth.signOut(); // NBU以外のアカウントは強制サインアウト
+    currentTeacher = null;
+    if (user) auth.signOut();
     logoutBtn.style.display = "none";
     showPage("gate");
   }
@@ -461,10 +472,10 @@ function goBack() {
 // ── PIN ───────────────────────────────────────────────────────────
 // ── 教員マスタ ───────────────────────────────────────────────────
 const TEACHERS = {
-  "7373": { id: "kawamura",  name: "河村" },
-  "3986": { id: "otani",     name: "大谷" },
-  "2940": { id: "hashimoto", name: "橋本拓" },
-  "7986": { id: "nabeta",    name: "鍋田" },
+  "7373": { id: "kawamura",  name: "河村",   email: "kawamurayj@nbu.ac.jp" },
+  "3986": { id: "otani",     name: "大谷",   email: "ootaniah@nbu.ac.jp" },
+  "2940": { id: "hashimoto", name: "橋本拓", email: "hashimototk@nbu.ac.jp" },
+  "7986": { id: "nabeta",    name: "鍋田",   email: "nabeta@nbu.ac.jp" },
 };
 const ADMIN_PIN = "1234";
 let currentTeacher = null; // { id, name } or { id:"admin", name:"管理者" }
