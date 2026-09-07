@@ -222,6 +222,11 @@
         <input id="edit-required" type="number" min="1" max="30" placeholder="例：10（空欄で設定なし）">
         <div id="required-hint" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
       </div>
+      <div class="field">
+        <label class="lbl">遅刻ライン（受付開始から何分後）</label>
+        <input id="edit-late" type="number" min="1" max="90" placeholder="例：10（空欄で遅刻なし）">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">受付開始から指定分数を超えた登録を「遅刻」として記録します</div>
+      </div>
       <div class="flex-row" style="margin-top:6px">
         <button class="btn btn-pri" onclick="saveCourse()">保存</button>
         <button class="btn btn-sec" onclick="showPage('list')">キャンセル</button>
@@ -570,6 +575,7 @@ function renderCourseList() {
         ${c.courseCode ? `<span class="tag" style="background:#88888822;color:#666;border:1px solid #88888833">📑 ${esc(c.courseCode)}</span>` : ""}
         ${c.period ? `<span class="tag" style="background:#88888822;color:#666;border:1px solid #88888833">🕐 ${c.period}限</span>` : ""}
         ${c.requiredSessions ? `<span class="tag" style="background:#4f5bd522;color:var(--accent);border:1px solid #4f5bd533">✅ ${c.requiredSessions}回以上で認定</span>` : ""}
+        ${c.lateMinutes ? `<span class="tag tag-yellow">⏱ ${c.lateMinutes}分超で遅刻</span>` : ""}
         ${active ? `<span class="tag tag-red">● 受付中（第${Number(activeSes[id].sessionIdx)+1}回）</span>` : ""}
         ${currentTeacher?.id === "admin" ? `<span class="tag" style="background:#88888822;color:#888;border:1px solid #88888833">🔑 ${(c.teacherIds||[c.teacherId||""]).map(tid=>getTeacherName(tid)).join("・")}</span>` : ""}
       </div>
@@ -597,6 +603,7 @@ function openEdit(idOrNull) {
   document.getElementById("edit-sessions").value         = c?.sessions   || 15;
   document.getElementById("edit-err").classList.remove("show");
   document.getElementById("edit-required").value = c?.requiredSessions ?? "";
+  document.getElementById("edit-late").value      = c?.lateMinutes ?? "";
   updateRequiredHint();
 
   // 管理者のみ担当教員選択を表示
@@ -637,11 +644,15 @@ async function saveCourse() {
   }
   const reqVal = document.getElementById("edit-required").value;
   const requiredSessions = reqVal ? Number(reqVal) : null;
+  const lateVal    = document.getElementById("edit-late").value;
+  const lateMinutes = lateVal ? Number(lateVal) : null;
   const courseCode = document.getElementById("edit-coursecode").value.trim();
   const period     = document.getElementById("edit-period").value;
   const data = { name, room, instructor, sessions, teacherIds, courseCode, period };
   if (requiredSessions) data.requiredSessions = requiredSessions;
   else data.requiredSessions = null;
+  if (lateMinutes) data.lateMinutes = lateMinutes;
+  else data.lateMinutes = null;
   try {
     if (id) await db.ref(`courses/${id}`).update(data);
     else    await db.ref("courses").push(data);
@@ -762,9 +773,10 @@ function stopTimerLoop() { if (timerInterval) { clearInterval(timerInterval); ti
 async function startSession() {
   const timeVal = document.getElementById("auto-stop-time").value;
   const data = {
-    sessionIdx:   Number(sessionSelIdx),
-    code:         genCode(),
-    codeIssuedAt: Date.now(),
+    sessionIdx:    Number(sessionSelIdx),
+    code:          genCode(),
+    codeIssuedAt:  Date.now(),
+    startedAt:     Date.now(), // 遅刻判定用
   };
   if (timeVal) {
     data.autoStopTime = timeVal; // "HH:MM" 形式
@@ -834,13 +846,20 @@ function renderAttendance(allData) {
   }
   document.getElementById("att-body").innerHTML = `
     <table>
-      <thead><tr><th>学籍番号</th><th>登録時刻</th><th>IPアドレス</th><th></th></tr></thead>
-      <tbody>${records.map(([rid, r]) => `<tr>
-        <td>${esc(r.studentNo)}</td>
-        <td>${fmtTime(r.time)}</td>
-        <td style="font-size:11px;color:var(--muted)">${esc(r.ip||"―")}</td>
-        <td><button class="btn btn-del btn-sm" onclick="deleteRecord('${rid}')">削除</button></td>
-      </tr>`).join("")}</tbody>
+      <thead><tr><th>学籍番号</th><th>登録時刻</th><th>区分</th><th>IPアドレス</th><th></th></tr></thead>
+      <tbody>${records.map(([rid, r]) => {
+        const isLate   = r.status === "late";
+        const statusBadge = isLate
+          ? `<span class="tag tag-yellow">△ 遅刻</span>`
+          : `<span class="tag tag-green">○ 出席</span>`;
+        return `<tr>
+          <td>${esc(r.studentNo)}</td>
+          <td>${fmtTime(r.time)}</td>
+          <td>${statusBadge}</td>
+          <td style="font-size:11px;color:var(--muted)">${esc(r.ip||"―")}</td>
+          <td><button class="btn btn-del btn-sm" onclick="deleteRecord('${rid}')">削除</button></td>
+        </tr>`;
+      }).join("")}</tbody>
     </table>`;
   window._lastRecords = records.map(([,r]) => r);
 }
@@ -851,7 +870,8 @@ async function deleteRecord(rid) {
 
 function exportCSV() {
   const rows = window._lastRecords || [];
-  const csv  = "\uFEFF学籍番号,登録時刻,IPアドレス\n" + rows.map(r => `${r.studentNo},${fmtTime(r.time)},${r.ip||""}`).join("\n");
+  const csv  = "\uFEFF学籍番号,登録時刻,区分,IPアドレス\n" +
+    rows.map(r => `${r.studentNo},${fmtTime(r.time)},${r.status==="late"?"遅刻":"出席"},${r.ip||""}`).join("\n");
   const a    = document.createElement("a");
   a.href     = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
   a.download = `出席_第${sessionSelIdx+1}回.csv`;
@@ -876,7 +896,8 @@ function exportUPCSV() {
     const isValid = !isNaN(d.getTime());
     const dd = isValid ? d : new Date();
     const implDate = `${dd.getFullYear()}/${dd.getMonth()+1}/${dd.getDate()}`;
-    return `${courseCode},${course.name},${r.studentNo},,,,${implDate},${period},0`;
+    const upStatus = r.status === "late" ? "2" : "0"; // 0:出席 2:遅刻
+    return `${courseCode},${course.name},${r.studentNo},,,,${implDate},${period},${upStatus}`;
   });
 
   // 改行コードはLF・末尾改行なし
@@ -896,8 +917,9 @@ function exportRateCSV() {
   const studentMap = {};
   Object.entries(allData).forEach(([idx, sessionData]) => {
     Object.values(sessionData).forEach(r => {
-      if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { attended: new Set() };
+      if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { attended: new Set(), lateSet: new Set() };
       studentMap[r.studentNo].attended.add(Number(idx));
+      if (r.status === "late") studentMap[r.studentNo].lateSet.add(Number(idx));
     });
   });
 
@@ -913,7 +935,10 @@ function exportRateCSV() {
       const rate    = Math.round(count / total * 100);
       const cert    = required ? (count >= required ? "○" : "×") : "";
       const certVal = required ? `,${cert}` : "";
-      const rounds  = Array.from({length: total}, (_, i) => s.attended.has(i) ? "○" : "―").join(",");
+      const rounds  = Array.from({length: total}, (_, i) => {
+        if (!s.attended.has(i)) return "―";
+        return s.lateSet.has(i) ? "△" : "○";
+      }).join(",");
       return `${no},${count},${total},${rate}%${certVal},${rounds}`;
     });
 
@@ -946,8 +971,9 @@ async function exportAllRateCSV() {
     const studentMap = {};
     Object.entries(attData).forEach(([idx, sessionData]) => {
       Object.values(sessionData).forEach(r => {
-        if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { attended: new Set() };
+        if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { attended: new Set(), lateSet: new Set() };
         studentMap[r.studentNo].attended.add(Number(idx));
+        if (r.status === "late") studentMap[r.studentNo].lateSet.add(Number(idx));
       });
     });
 
@@ -966,7 +992,10 @@ async function exportAllRateCSV() {
         const count  = s.attended.size;
         const rate   = Math.round(count / total * 100) + "%";
         const cert   = required ? (count >= required ? "○" : "×") : null;
-        const rounds = Array.from({length: total}, (_, i) => s.attended.has(i) ? "○" : "―");
+        const rounds = Array.from({length: total}, (_, i) => {
+          if (!s.attended.has(i)) return "―";
+          return s.lateSet?.has(i) ? "△" : "○";
+        });
         return cert !== null
           ? [no, count, total, rate, cert, ...rounds]
           : [no, count, total, rate, ...rounds];
@@ -1079,14 +1108,23 @@ async function submitAttendance() {
       showErr("すでに出席登録済みです"); return;
     }
 
+    // 遅刻判定
+    const course       = courses[courseId];
+    const lateMinutes  = course?.lateMinutes || null;
+    const startedAt    = ses.startedAt || ses.codeIssuedAt;
+    const elapsedMin   = (Date.now() - startedAt) / 1000 / 60;
+    const isLate       = lateMinutes && elapsedMin >= lateMinutes;
+    const status       = isLate ? "late" : "present"; // present:出席 / late:遅刻
+
     // 本データも保存（一覧表示・CSV用）
     await db.ref(`attendance/${courseId}/${Number(ses.sessionIdx)}`).push({
-      studentNo, time: new Date().toISOString(), ip
+      studentNo, time: new Date().toISOString(), ip, status
     });
 
     setCookie(cookieKey(courseId, Number(ses.sessionIdx)));
     saveStudentHistory(studentNo);
-    okEl.textContent = `「${courses[courseId]?.name}」第${Number(ses.sessionIdx)+1}回の出席を登録しました`;
+    const statusMsg = isLate ? "（遅刻）" : "";
+    okEl.textContent = `「${courses[courseId]?.name}」第${Number(ses.sessionIdx)+1}回の出席を登録しました${statusMsg}`;
     okEl.classList.add("show");
     document.getElementById("stu-code").value = "";
     document.getElementById("stu-no").value = "";
