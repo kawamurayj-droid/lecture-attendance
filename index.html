@@ -190,6 +190,7 @@
       <p class="sec" style="margin:0">科目一覧</p>
       <span id="teacher-badge" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
       <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" id="all-rate-btn" onclick="exportAllRateCSV()" style="display:none">📊 全科目出席率CSV</button>
         <button class="btn btn-del btn-sm" id="force-stop-btn" onclick="forceStopAll()" style="display:none">⏹ 全受付強制終了</button>
         <button class="btn btn-pri" onclick="showPage('edit',null)">＋ 科目追加</button>
       </div>
@@ -289,7 +290,9 @@
       <p class="sec">登録履歴確認</p>
       <div class="alert alert-err"  id="mc-err"></div>
       <div class="field"><label class="lbl">学籍番号</label>
-        <input id="mc-no" placeholder="例：23001001" onkeydown="if(event.key==='Enter')checkMyHistory()">
+        <input id="mc-no" placeholder="例：202433001" inputmode="numeric"
+          oninput="normalizeStudentNo(this)"
+          onkeydown="if(event.key==='Enter')checkMyHistory()">
       </div>
       <button class="btn btn-pri btn-full" onclick="checkMyHistory()">確認する</button>
     </div>
@@ -311,7 +314,16 @@
           </select>
         </div>
         <div class="alert alert-info show" id="stu-status" style="margin-bottom:12px"></div>
-        <div class="field"><label class="lbl">学籍番号</label><input id="stu-no" placeholder="例：23001001" oninput="clearStuMsg()"></div>
+        <div class="field"><label class="lbl">学籍番号（9桁）</label>
+          <input id="stu-no" placeholder="例：202433001" inputmode="numeric"
+            oninput="normalizeStudentNo(this); clearStuMsg()">
+          <div id="stu-no-hint" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+        </div>
+        <div style="background:#4f5bd511;border:1px solid #4f5bd533;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--sub);line-height:1.7">
+          ⚠️ 学籍番号は正確に9桁で入力してください。<br>
+          　 誤った番号では出席が記録されません。<br>
+          　 全角数字は自動で半角に変換されます。
+        </div>
         <div style="text-align:right;margin-top:-8px;margin-bottom:8px">
           <button type="button" onclick="clearStudentHistory()" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;text-decoration:underline">入力履歴をクリア</button>
         </div>
@@ -519,6 +531,9 @@ function renderCourseList() {
     forceBtn.style.opacity = hasActive ? "1" : "0.4";
     forceBtn.style.pointerEvents = hasActive ? "" : "none";
   }
+  // 管理者のみ全科目出席率CSVボタンを表示
+  const allRateBtn = document.getElementById("all-rate-btn");
+  if (allRateBtn) allRateBtn.style.display = currentTeacher?.id === "admin" ? "" : "none";
 
   // 管理者は全科目、教員は自分の科目だけ
   const entries = Object.entries(courses).filter(([id, c]) => {
@@ -877,8 +892,7 @@ function exportRateCSV() {
   if (!course) return;
   const total    = course.sessions;
 
-  // 全学生を収集
-  const studentMap = {}; // { studentNo: { attended: Set } }
+  const studentMap = {};
   Object.entries(allData).forEach(([idx, sessionData]) => {
     Object.values(sessionData).forEach(r => {
       if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { attended: new Set() };
@@ -886,13 +900,11 @@ function exportRateCSV() {
     });
   });
 
-  // ヘッダー行：学籍番号,出席回数,総回数,出席率,第1回,第2回,...
   const required     = course.requiredSessions || null;
   const roundHeaders = Array.from({length: total}, (_, i) => `第${i+1}回`).join(",");
   const certCol      = required ? ",認定" : "";
   const header       = `\uFEFF学籍番号,出席回数,総回数,出席率${certCol},${roundHeaders}`;
 
-  // データ行
   const rows = Object.entries(studentMap)
     .sort(([a],[b]) => a.localeCompare(b))
     .map(([no, s]) => {
@@ -908,6 +920,66 @@ function exportRateCSV() {
   const a   = document.createElement("a");
   a.href    = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
   a.download = `出席率_${course.name}.csv`;
+  a.click();
+}
+
+// ── 管理者用：全科目出席率一括ダウンロード ───────────────────────
+async function exportAllRateCSV() {
+  if (currentTeacher?.id !== "admin") { alert("管理者のみ使用できます"); return; }
+
+  // 全科目の出席データをFirebaseから取得
+  const snap = await db.ref("attendance").once("value");
+  const allAtt = snap.val() || {};
+
+  // 全科目分のCSVをZIP代わりに連結して1ファイルに
+  const sections = [];
+  const courseEntries = Object.entries(courses);
+  if (courseEntries.length === 0) { alert("科目がありません"); return; }
+
+  courseEntries.forEach(([courseId, course]) => {
+    const total    = course.sessions;
+    const attData  = allAtt[courseId] || {};
+    const required = course.requiredSessions || null;
+
+    // 学生ごとに集計
+    const studentMap = {};
+    Object.entries(attData).forEach(([idx, sessionData]) => {
+      Object.values(sessionData).forEach(r => {
+        if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { attended: new Set() };
+        studentMap[r.studentNo].attended.add(Number(idx));
+      });
+    });
+
+    if (Object.keys(studentMap).length === 0) return; // データなしはスキップ
+
+    const roundHeaders = Array.from({length: total}, (_, i) => `第${i+1}回`).join(",");
+    const certCol      = required ? ",認定" : "";
+
+    // 科目名を見出しとして追加
+    sections.push(`【${course.name}】（全${total}回${required ? `・認定ライン${required}回` : ""}）`);
+    sections.push(`学籍番号,出席回数,総回数,出席率${certCol},${roundHeaders}`);
+
+    Object.entries(studentMap)
+      .sort(([a],[b]) => a.localeCompare(b))
+      .forEach(([no, s]) => {
+        const count   = s.attended.size;
+        const rate    = Math.round(count / total * 100);
+        const cert    = required ? (count >= required ? "○" : "×") : "";
+        const certVal = required ? `,${cert}` : "";
+        const rounds  = Array.from({length: total}, (_, i) => s.attended.has(i) ? "○" : "―").join(",");
+        sections.push(`${no},${count},${total},${rate}%${certVal},${rounds}`);
+      });
+
+    sections.push(""); // 科目間の空行
+  });
+
+  if (sections.length === 0) { alert("出席データがありません"); return; }
+
+  const csv = "\uFEFF" + sections.join("\n");
+  const a   = document.createElement("a");
+  a.href    = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
+  const today = new Date();
+  a.download = `全科目出席率_${today.getFullYear()}${today.getMonth()+1}${today.getDate()}.csv`;
   a.click();
 }
 
@@ -960,6 +1032,7 @@ async function submitAttendance() {
   const showErr = msg => { errEl.textContent=msg; errEl.classList.add("show"); };
 
   if (!courseId || !studentNo || !code) { showErr("すべての項目を入力してください"); return; }
+  if (!/^[0-9]{9}$/.test(studentNo)) { showErr("学籍番号は半角数字9桁で入力してください"); return; }
   const ses = activeSes[courseId];
   if (!ses)               { showErr("この科目は現在受付中ではありません"); return; }
   if (ses.code !== code)  { showErr("出席コードが違います"); return; }
@@ -1051,6 +1124,21 @@ function clearStudentHistory() {
   try { localStorage.removeItem("stu_no"); } catch(e) {}
   document.getElementById("stu-no").value = "";
 }
+function normalizeStudentNo(el) {
+  // 全角数字→半角に変換
+  el.value = el.value.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+  // 数字以外を除去
+  el.value = el.value.replace(/[^0-9]/g, "");
+  // 桁数ヒント表示
+  const hint = document.getElementById("stu-no-hint");
+  if (!hint) return;
+  const len = el.value.length;
+  if (len === 0)      { hint.textContent = ""; hint.style.color = "var(--muted)"; }
+  else if (len < 9)   { hint.textContent = `${len}桁（あと${9 - len}桁）`; hint.style.color = "var(--yellow)"; }
+  else if (len === 9) { hint.textContent = "9桁 ✓"; hint.style.color = "var(--green)"; }
+  else                { hint.textContent = `${len}桁（9桁を超えています）`; hint.style.color = "var(--red)"; }
+}
+
 function clearStuMsg() {
   document.getElementById("stu-err").classList.remove("show");
   document.getElementById("stu-ok").classList.remove("show");
