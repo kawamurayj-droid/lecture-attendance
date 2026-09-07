@@ -278,6 +278,24 @@
       </div>
     </div>
 
+    <!-- 名簿管理 -->
+    <div class="card">
+      <div class="flex-row" style="margin-bottom:14px">
+        <p class="sec" style="margin:0">名簿　<span id="roster-count" style="color:var(--accent)"></span></p>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('roster-file').click()">📂 名簿を読み込む</button>
+          <button class="btn btn-ghost btn-sm" id="roster-clear-btn" onclick="clearRoster()" style="display:none">🗑 名簿を削除</button>
+          <input type="file" id="roster-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="importRoster(this)">
+        </div>
+      </div>
+      <div id="roster-hint" style="font-size:11px;color:var(--muted);margin-bottom:10px">
+        CSV・Excelファイルをインポートできます。1列目：学籍番号、2列目：氏名（任意）、3列目以降：その他情報（任意）
+      </div>
+      <div id="roster-body">
+        <div style="color:var(--muted);font-size:12px;text-align:center;padding:12px 0">名簿が登録されていません</div>
+      </div>
+    </div>
+
     <!-- 出席者一覧 -->
     <div class="card">
       <div class="flex-row" style="margin-bottom:14px">
@@ -286,7 +304,6 @@
           <button class="btn btn-ghost btn-sm" id="rate-btn" onclick="exportRateCSV()" style="display:none">出席率CSV</button>
           <button class="btn btn-ghost btn-sm" id="csv-btn"  onclick="exportCSV()"     style="display:none">回別CSV</button>
           <button class="btn btn-pri btn-sm"   id="up-btn"   onclick="exportUPCSV()"   style="display:none">UPシステム用CSV</button>
-
         </div>
       </div>
       <div id="att-body"></div>
@@ -689,12 +706,14 @@ async function deleteCourse(id, name) {
 function openSession(id) {
   sessionCourseId = id;
   sessionSelIdx   = 0;
+  currentRoster   = [];
   // 終了時刻は空欄にリセット
   const timeInput = document.getElementById("auto-stop-time");
   if (timeInput) timeInput.value = "";
   renderSessionCourse();
   renderSessionTabs();
   renderSessionCode();
+  loadRoster(); // 名簿を読み込む
 
   // 出席データ購読
   if (attUnsubscribe) attUnsubscribe();
@@ -941,16 +960,29 @@ function exportRateCSV() {
   const studentMap = {};
   Object.entries(allData).forEach(([idx, sessionData]) => {
     Object.values(sessionData).forEach(r => {
-      if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { attended: new Set(), lateSet: new Set() };
+      if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { attended: new Set(), lateSet: new Set(), name: "" };
       studentMap[r.studentNo].attended.add(Number(idx));
       if (r.status === "late") studentMap[r.studentNo].lateSet.add(Number(idx));
     });
   });
 
+  // 名簿がある場合は欠席者も補完
+  if (currentRoster.length > 0) {
+    currentRoster.forEach(r => {
+      if (!studentMap[r.studentNo]) {
+        studentMap[r.studentNo] = { attended: new Set(), lateSet: new Set(), name: r.name };
+      } else {
+        studentMap[r.studentNo].name = r.name;
+      }
+    });
+  }
+
   const required     = course.requiredSessions || null;
+  const hasRoster    = currentRoster.length > 0;
   const roundHeaders = Array.from({length: total}, (_, i) => `第${i+1}回`).join(",");
   const certCol      = required ? ",認定" : "";
-  const header       = `\uFEFF学籍番号,出席回数,総回数,出席率${certCol},${roundHeaders}`;
+  const nameCol      = hasRoster ? ",氏名" : "";
+  const header       = `\uFEFF学籍番号${nameCol},出席回数,総回数,出席率${certCol},${roundHeaders}`;
 
   const rows = Object.entries(studentMap)
     .sort(([a],[b]) => a.localeCompare(b))
@@ -959,11 +991,12 @@ function exportRateCSV() {
       const rate    = Math.round(count / total * 100);
       const cert    = required ? (count >= required ? "○" : "×") : "";
       const certVal = required ? `,${cert}` : "";
+      const nameVal = hasRoster ? `,${s.name||""}` : "";
       const rounds  = Array.from({length: total}, (_, i) => {
         if (!s.attended.has(i)) return "―";
         return s.lateSet.has(i) ? "△" : "○";
       }).join(",");
-      return `${no},${count},${total},${rate}%${certVal},${rounds}`;
+      return `${no}${nameVal},${count},${total},${rate}%${certVal},${rounds}`;
     });
 
   const csv = header + "\n" + rows.join("\n");
@@ -1352,6 +1385,155 @@ async function importBackup(input) {
   } catch(e) {
     alert("復元に失敗しました: " + e.message);
   }
+}
+
+// ── 名簿管理 ─────────────────────────────────────────────────────
+let currentRoster = []; // [{ studentNo, name, ...extra }]
+
+async function importRoster(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = "";
+
+  try {
+    let rows = [];
+    if (file.name.toLowerCase().endsWith(".csv")) {
+      // CSV読み込み（BOM対応・複数エンコーディング試行）
+      const buf  = await file.arrayBuffer();
+      const text = new TextDecoder("utf-8").decode(buf).replace(/^\uFEFF/, "");
+      const lines = text.replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n").filter(l => l.trim());
+      rows = lines.map(line => {
+        const cols = []; let cur = "", inQ = false;
+        for (let i = 0; i < line.length; i++) {
+          if (line[i] === '"') { inQ = !inQ; }
+          else if (line[i] === ',' && !inQ) { cols.push(cur.trim()); cur = ""; }
+          else { cur += line[i]; }
+        }
+        cols.push(cur.trim());
+        return cols;
+      });
+    } else {
+      // Excel読み込み（SheetJS）
+      const buf = await file.arrayBuffer();
+      const wb  = XLSX.read(buf, {type:"array"});
+      const ws  = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:""});
+    }
+
+    if (rows.length === 0) { alert("データが見つかりませんでした"); return; }
+
+    // ── ヘッダー行を自動検出 ──
+    // 「学籍番号」という文字が含まれる行をヘッダーとして探す
+    let headerRowIdx = -1;
+    let colNo = 0, colName = 1, colGrade = -1, colGender = -1, colDept = -1;
+
+    for (let i = 0; i < Math.min(rows.length, 10); i++) {
+      const row = rows[i].map(c => String(c));
+      const noIdx = row.findIndex(c => c.includes("学籍番号"));
+      if (noIdx >= 0) {
+        headerRowIdx = i;
+        colNo     = noIdx;
+        colName   = row.findIndex(c => c.includes("学生氏名") && !c.includes("カナ") && !c.includes("英語"));
+        if (colName < 0) colName = row.findIndex(c => c.includes("氏名") && !c.includes("カナ") && !c.includes("英語"));
+        colGrade  = row.findIndex(c => c === "学年" || c.includes("学年"));
+        colGender = row.findIndex(c => c.includes("性別"));
+        colDept   = row.findIndex(c => c.includes("所属学科") && !c.includes("コード"));
+        break;
+      }
+    }
+
+    // ヘッダーが見つからない場合は1列目を学籍番号とみなす
+    const dataStartIdx = headerRowIdx >= 0 ? headerRowIdx + 1 : 0;
+    const dataRows = rows.slice(dataStartIdx);
+
+    // 学籍番号を全角→半角変換してパース
+    currentRoster = dataRows
+      .filter(r => r[colNo] !== null && r[colNo] !== undefined && String(r[colNo]).trim())
+      .map(r => {
+        const no = String(r[colNo]).trim()
+          .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+          .replace(/\.0$/, "") // Excelが数値として読んだ場合の .0 除去
+          .replace(/[^0-9]/g, "");
+        const name   = colName   >= 0 ? String(r[colName]   || "").trim() : "";
+        const grade  = colGrade  >= 0 ? String(r[colGrade]  || "").trim() : "";
+        const gender = colGender >= 0 ? String(r[colGender] || "").trim() : "";
+        const dept   = colDept   >= 0 ? String(r[colDept]   || "").trim() : "";
+        const extra  = [grade, gender, dept].filter(Boolean);
+        return { studentNo: no, name, extra };
+      })
+      .filter(r => r.studentNo.length === 9);
+
+    if (currentRoster.length === 0) {
+      alert("有効な学籍番号（9桁）が見つかりませんでした\n\n" +
+        "ファイルの形式を確認してください。\n" +
+        "・1列目または「学籍番号」列に9桁の数字が必要です");
+      return;
+    }
+
+    // Firebaseに保存
+    await db.ref(`rosters/${sessionCourseId}`).set({
+      data:       currentRoster,
+      importedAt: new Date().toISOString(),
+      fileName:   file.name,
+    });
+
+    renderRoster();
+    alert(`名簿を登録しました（${currentRoster.length}名）\nファイル：${file.name}`);
+  } catch(e) {
+    alert("名簿の読み込みに失敗しました: " + e.message);
+  }
+}
+
+async function loadRoster() {
+  const snap = await db.ref(`rosters/${sessionCourseId}`).once("value");
+  const data = snap.val();
+  if (data && data.data) {
+    currentRoster = data.data;
+    renderRoster();
+  } else {
+    currentRoster = [];
+    renderRoster();
+  }
+}
+
+async function clearRoster() {
+  if (!confirm("この科目の名簿を削除しますか？")) return;
+  await db.ref(`rosters/${sessionCourseId}`).remove();
+  currentRoster = [];
+  renderRoster();
+}
+
+function renderRoster() {
+  const countEl  = document.getElementById("roster-count");
+  const bodyEl   = document.getElementById("roster-body");
+  const clearBtn = document.getElementById("roster-clear-btn");
+
+  if (currentRoster.length === 0) {
+    if (countEl)  countEl.textContent  = "";
+    if (clearBtn) clearBtn.style.display = "none";
+    if (bodyEl)   bodyEl.innerHTML = `<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px 0">名簿が登録されていません</div>`;
+    return;
+  }
+
+  if (countEl)  countEl.textContent   = `${currentRoster.length}名`;
+  if (clearBtn) clearBtn.style.display = "";
+
+  // 先頭5件だけプレビュー表示
+  const preview = currentRoster.slice(0, 5);
+  const more    = currentRoster.length > 5 ? `<div style="font-size:11px;color:var(--muted);padding:6px 0">…他 ${currentRoster.length - 5} 名</div>` : "";
+  if (bodyEl) bodyEl.innerHTML = `
+    <table style="font-size:12px;width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted);font-size:10px">学籍番号</th>
+        <th style="text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted);font-size:10px">氏名</th>
+        <th style="text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted);font-size:10px">その他</th>
+      </tr></thead>
+      <tbody>${preview.map(r => `<tr>
+        <td style="padding:6px 10px;border-bottom:1px solid #eef0f8;color:var(--sub)">${esc(r.studentNo)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eef0f8;color:var(--sub)">${esc(r.name||"―")}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eef0f8;color:var(--muted);font-size:11px">${esc(r.extra.join(" / ")||"―")}</td>
+      </tr>`).join("")}</tbody>
+    </table>${more}`;
 }
 
 async function forceStopAll() {
