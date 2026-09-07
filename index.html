@@ -161,7 +161,7 @@
     <div id="teacher-mode-btn" style="display:none">
       <div style="border-top:1px solid var(--border);margin:8px 0 14px;"></div>
       <p style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">教員メニュー</p>
-      <button class="mode-btn" onclick="showPage('list')" style="width:100%;text-align:left;padding:18px 20px;display:flex;align-items:center;gap:14px">
+      <button class="mode-btn" onclick="showPage('pin')" style="width:100%;text-align:left;padding:18px 20px;display:flex;align-items:center;gap:14px">
         <div class="icon" style="font-size:22px;margin:0">📋</div>
         <div>
           <div class="label">教員管理画面</div>
@@ -380,22 +380,9 @@ auth.onAuthStateChanged(async user => {
     logoutBtn.style.display = "";
     if (!listenersAttached) { attachDataListeners(); listenersAttached = true; }
 
-    // Firebaseのteachersリストで教員かどうか確認
-    // キー形式：ドットをアンダースコアに変換（@はそのまま）
-    const emailKey = user.email.replace(/\./g, "_");
-    const snap = await db.ref(`teachers/${emailKey}`).once("value");
-    if (snap.val() === true) {
-      // 教員：メールアドレスから教員情報を自動設定
-      const teacherEntry = Object.entries(TEACHERS).find(([,t]) => t.email === user.email);
-      currentTeacher = teacherEntry
-        ? { id: teacherEntry[1].id, name: teacherEntry[1].name }
-        : { id: emailKey, name: user.displayName || user.email };
-      showPage("home");
-    } else {
-      // 学生：学生画面のみ
-      currentTeacher = null;
-      showPage("home");
-    }
+    // ログイン後はホーム画面へ（教員判定はPIN入力後に行う）
+    currentTeacher = null;
+    showPage("home");
   } else {
     currentUser = null;
     currentTeacher = null;
@@ -465,9 +452,9 @@ function showPage(name, extra) {
   if (name === "session") openSession(extra);
   if (name === "student") { renderStudentCourses(); renderStudentStatus(); loadStudentHistory(); }
   if (name === "home") {
-    // 教員ログイン中は教員メニューボタンを表示
+    // NBUアカウントでログイン済みなら教員メニューボタンを表示
     const teacherBtn = document.getElementById("teacher-mode-btn");
-    if (teacherBtn) teacherBtn.style.display = currentTeacher ? "" : "none";
+    if (teacherBtn) teacherBtn.style.display = currentUser ? "" : "none";
   }
   if (name === "mycheck") {
     document.getElementById("mc-err").classList.remove("show");
