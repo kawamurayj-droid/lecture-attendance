@@ -359,7 +359,12 @@
         </div>
         <div class="field"><label class="lbl">出席コード（4桁）</label>
           <input id="stu-code" maxlength="4" placeholder="0000" class="pin-input"
+            inputmode="numeric"
+            oninput="normalizeCode(this)"
             onkeydown="if(event.key==='Enter')submitAttendance()">
+        </div>
+        <div style="background:#e03c3c11;border:1px solid #e03c3c33;border-radius:8px;padding:9px 14px;margin-bottom:12px;font-size:12px;color:var(--sub)">
+          ⚠️ コードは60秒ごとに自動更新されます。<br>残り秒数が少ない場合は更新後のコードで登録してください。
         </div>
         <button class="btn btn-pri btn-full" onclick="submitAttendance()">出席登録</button>
       </div>
@@ -747,8 +752,18 @@ function startTimerLoop(ses) {
     const now     = Date.now();
     const elapsed = Math.floor((now - ses.codeIssuedAt) / 1000);
     const remaining = 60 - (elapsed % 60);
-    document.getElementById("timer-text").textContent = `次の更新まで ${remaining} 秒`;
-    document.getElementById("timer-fill").style.width  = (remaining / 60 * 100) + "%";
+    const timerTextEl = document.getElementById("timer-text");
+    const timerFillEl = document.getElementById("timer-fill");
+    if (remaining <= 10) {
+      timerTextEl.textContent = `⚠️ もうすぐ更新されます（${remaining} 秒）`;
+      timerTextEl.style.color = "var(--red)";
+      timerFillEl.style.background = "var(--red)";
+    } else {
+      timerTextEl.textContent = `次の更新まで ${remaining} 秒`;
+      timerTextEl.style.color = "var(--muted)";
+      timerFillEl.style.background = "var(--accent)";
+    }
+    timerFillEl.style.width = (remaining / 60 * 100) + "%";
 
     // 自動終了チェック
     if (ses.autoStopAt && now >= ses.autoStopAt) {
@@ -1064,7 +1079,7 @@ function onCourseSelect() {
 async function submitAttendance() {
   const courseId  = document.getElementById("stu-course").value;
   const studentNo = document.getElementById("stu-no").value.trim();
-  const code      = document.getElementById("stu-code").value.trim();
+  const code      = document.getElementById("stu-code").value.replace(/\s/g,"").replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
   const errEl     = document.getElementById("stu-err");
   const okEl      = document.getElementById("stu-ok");
   errEl.classList.remove("show"); okEl.classList.remove("show");
@@ -1173,6 +1188,13 @@ function clearStudentHistory() {
   try { localStorage.removeItem("stu_no"); } catch(e) {}
   document.getElementById("stu-no").value = "";
 }
+function normalizeCode(el) {
+  // 全角数字→半角・スペース除去・数字のみ
+  el.value = el.value
+    .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+    .replace(/[^0-9]/g, "");
+}
+
 function normalizeStudentNo(el) {
   // 全角数字→半角に変換
   el.value = el.value.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
