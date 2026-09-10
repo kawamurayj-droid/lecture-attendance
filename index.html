@@ -470,6 +470,7 @@ let timerInterval   = null;
 let attUnsubscribe  = null;
 
 // ── Firebase 購読（ログイン確認後に一度だけ開始） ──────────────────
+// courses・activeSessions は学生・教員共通
 function attachDataListeners() {
   db.ref("courses").on("value", snap => {
     courses = snap.val() || {};
@@ -483,6 +484,14 @@ function attachDataListeners() {
     if (currentPage === "student") renderStudentStatus();
     if (currentPage === "list")    renderCourseList();
   });
+  // attendance の購読は教員PIN認証後にのみ開始（attachTeacherListeners()）
+}
+
+// attendance は教員ログイン後のみ購読開始
+let teacherListenersAttached = false;
+function attachTeacherListeners() {
+  if (teacherListenersAttached) return;
+  teacherListenersAttached = true;
   db.ref("attendance").on("value", snap => {
     allAttendance = snap.val() || {};
     if (currentPage === "list") renderCourseList();
@@ -586,6 +595,7 @@ async function checkPin() {
       const t = TEACHERS[teacherId];
       currentTeacher = { id: teacherId, name: t ? t.name : teacherId };
     }
+    attachTeacherListeners(); // 教員確認後にattendance購読開始
     showPage("list");
   } catch(e) {
     errEl.textContent = "認証に失敗しました: " + e.message;
@@ -1302,10 +1312,22 @@ async function submitAttendance() {
     const isLate       = lateMinutes && elapsedMin >= lateMinutes;
     const status       = isLate ? "late" : "present"; // present:出席 / late:遅刻
 
-    // 本データも保存（一覧表示・CSV用）
-    await db.ref(`attendance/${courseId}/${Number(ses.sessionIdx)}`).push({
-      studentNo, time: new Date().toISOString(), ip, status
-    });
+    // 本データを保存（教員向け出席一覧・CSV用）
+    const attRef  = db.ref(`attendance/${courseId}/${Number(ses.sessionIdx)}`);
+    const newRef  = attRef.push();
+    const record  = { studentNo, time: new Date().toISOString(), ip, status };
+    await newRef.set(record);
+
+    // 自分の出席履歴にも保存（学生が自分のデータのみ参照できるパス）
+    if (currentUser) {
+      await db.ref(`myAttendance/${currentUser.uid}/${courseId}/${Number(ses.sessionIdx)}`).update({
+        studentNo,
+        courseName: courses[courseId]?.name || courseId,
+        totalSessions: courses[courseId]?.sessions || 0,
+        time: record.time,
+        status,
+      });
+    }
 
     setCookie(cookieKey(courseId, Number(ses.sessionIdx)));
     saveStudentHistory(studentNo);
@@ -1688,56 +1710,65 @@ function fmtDate(iso) { try { return new Date(iso).toLocaleDateString("ja-JP",{m
 function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
 // ── 登録履歴確認（学生用） ──────────────────────────────────────
-function checkMyHistory() {
-  const myNo = getMyStudentNo();
-  const no   = myNo || "";
+async function checkMyHistory() {
   const errEl = document.getElementById("mc-err");
+  const resultsEl = document.getElementById("mc-results");
   errEl.classList.remove("show");
 
-  if (!no) { errEl.textContent = "学籍番号が取得できません"; errEl.classList.add("show"); return; }
+  if (!currentUser) { errEl.textContent = "ログインしてください"; errEl.classList.add("show"); return; }
 
-  // 全科目・全回をスキャンして該当学籍番号の登録を集める
-  const found = []; // { courseName, sessionIdx, time }
-  Object.entries(courses).forEach(([courseId, c]) => {
-    const courseAtt = allAttendance[courseId] || {};
-    Object.entries(courseAtt).forEach(([idx, sessionData]) => {
-      Object.values(sessionData).forEach(r => {
-        if (r.studentNo === no) {
-          found.push({ courseName: c.name, sessionIdx: Number(idx), time: r.time, totalSessions: c.sessions });
-        }
+  resultsEl.innerHTML = `<div style="text-align:center;color:var(--muted);padding:20px;font-size:13px">読み込み中...</div>`;
+
+  try {
+    // 自分のデータのみ取得（allAttendance の全件スキャンをしない）
+    const snap = await db.ref(`myAttendance/${currentUser.uid}`).once("value");
+    const myData = snap.val();
+
+    if (!myData) {
+      resultsEl.innerHTML = `<div class="card"><div style="color:var(--muted);text-align:center;padding:12px 0;font-size:13px">出席登録の履歴が見つかりませんでした</div></div>`;
+      return;
+    }
+
+    // 科目ごとにグループ化
+    const byCourse = {};
+    Object.entries(myData).forEach(([courseId, sessions]) => {
+      Object.entries(sessions).forEach(([idx, r]) => {
+        const courseName   = r.courseName || courseId;
+        const totalSessions = r.totalSessions || 0;
+        if (!byCourse[courseName]) byCourse[courseName] = { total: totalSessions, sessions: [] };
+        byCourse[courseName].sessions.push({ sessionIdx: Number(idx), time: r.time, status: r.status });
       });
     });
-  });
 
-  const resultsEl = document.getElementById("mc-results");
-  if (found.length === 0) {
-    resultsEl.innerHTML = `<div class="card"><div style="color:var(--muted);text-align:center;padding:12px 0;font-size:13px">この学籍番号での登録履歴は見つかりませんでした</div></div>`;
-    return;
+    if (Object.keys(byCourse).length === 0) {
+      resultsEl.innerHTML = `<div class="card"><div style="color:var(--muted);text-align:center;padding:12px 0;font-size:13px">出席登録の履歴が見つかりませんでした</div></div>`;
+      return;
+    }
+
+    resultsEl.innerHTML = Object.entries(byCourse).map(([courseName, data]) => {
+      const sorted = data.sessions.sort((a,b) => a.sessionIdx - b.sessionIdx);
+      const rows = sorted.map(s => {
+        const badge = s.status === "late"
+          ? `<span class="tag tag-yellow">△ 遅刻</span>`
+          : `<span class="tag tag-green">○ 出席</span>`;
+        return `<tr><td>第${s.sessionIdx+1}回</td><td>${fmtDate(s.time)} ${fmtTime(s.time)}</td><td>${badge}</td></tr>`;
+      }).join("");
+      return `<div class="card">
+        <div class="flex-row" style="margin-bottom:10px">
+          <span style="font-size:14px;font-weight:700">${esc(courseName)}</span>
+          <span class="tag tag-blue" style="margin-left:auto">${data.sessions.length}${data.total ? ` / ${data.total}回` : "回"} 出席</span>
+        </div>
+        <table>
+          <thead><tr><th>回</th><th>登録時刻</th><th>状態</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    }).join("");
+  } catch(e) {
+    resultsEl.innerHTML = "";
+    errEl.textContent = "取得に失敗しました: " + e.message;
+    errEl.classList.add("show");
   }
-
-  // 科目ごとにグループ化
-  const byCourse = {};
-  found.forEach(f => {
-    if (!byCourse[f.courseName]) byCourse[f.courseName] = { total: f.totalSessions, sessions: [] };
-    byCourse[f.courseName].sessions.push(f);
-  });
-
-  resultsEl.innerHTML = Object.entries(byCourse).map(([courseName, data]) => {
-    const sorted = data.sessions.sort((a,b) => a.sessionIdx - b.sessionIdx);
-    const rows = sorted.map(s =>
-      `<tr><td>第${s.sessionIdx+1}回</td><td>${fmtDate(s.time)} ${fmtTime(s.time)}</td><td><span class="tag tag-green">登録済み</span></td></tr>`
-    ).join("");
-    return `<div class="card">
-      <div class="flex-row" style="margin-bottom:10px">
-        <span style="font-size:14px;font-weight:700">${esc(courseName)}</span>
-        <span class="tag tag-blue" style="margin-left:auto">${data.sessions.length} / ${data.total}回 出席</span>
-      </div>
-      <table>
-        <thead><tr><th>回</th><th>登録時刻</th><th>状態</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
-  }).join("");
 }
 </script>
 </body>
