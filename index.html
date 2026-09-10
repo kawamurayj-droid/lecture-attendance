@@ -318,13 +318,16 @@
   <div class="page" id="page-mycheck" style="max-width:560px;margin:0 auto">
     <div class="card">
       <p class="sec">登録履歴確認</p>
-      <div class="alert alert-err"  id="mc-err"></div>
-      <div class="field"><label class="lbl">学籍番号</label>
-        <input id="mc-no" placeholder="例：202433001" inputmode="numeric"
-          oninput="normalizeStudentNo(this)"
-          onkeydown="if(event.key==='Enter')checkMyHistory()">
+      <div class="alert alert-err" id="mc-err"></div>
+      <div id="mc-own-info" style="background:var(--bg3);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--sub);display:none">
+        <span style="color:var(--muted);font-size:11px;letter-spacing:1px">学籍番号</span><br>
+        <span id="mc-own-no" style="font-size:20px;font-weight:700;color:var(--accent);letter-spacing:4px"></span>
       </div>
-      <button class="btn btn-pri btn-full" onclick="checkMyHistory()">確認する</button>
+      <div id="mc-no-studentno" class="alert alert-err show" style="display:none">
+        お使いのアカウントに学籍番号が紐づいていません。<br>
+        <span style="font-size:11px">（メールアドレス形式：s学籍番号@nbu.ac.jp）</span>
+      </div>
+      <button class="btn btn-pri btn-full" id="mc-check-btn" onclick="checkMyHistory()" style="display:none">自分の出席履歴を確認する</button>
     </div>
     <div id="mc-results"></div>
   </div>
@@ -506,10 +509,21 @@ function showPage(name, extra) {
   if (name === "mycheck") {
     document.getElementById("mc-err").classList.remove("show");
     document.getElementById("mc-results").innerHTML = "";
-    try {
-      const savedNo = localStorage.getItem("stu_no");
-      if (savedNo) document.getElementById("mc-no").value = savedNo;
-    } catch(e) {}
+    const myNo = getMyStudentNo();
+    const ownInfo = document.getElementById("mc-own-info");
+    const ownNo   = document.getElementById("mc-own-no");
+    const noStudentNo = document.getElementById("mc-no-studentno");
+    const checkBtn    = document.getElementById("mc-check-btn");
+    if (myNo) {
+      ownInfo.style.display = "";
+      ownNo.textContent = myNo;
+      noStudentNo.style.display = "none";
+      checkBtn.style.display = "";
+    } else {
+      ownInfo.style.display = "none";
+      noStudentNo.style.display = "";
+      checkBtn.style.display = "none";
+    }
   }
   if (name === "pin")     { document.getElementById("pin-input").value=""; document.getElementById("pin-err").classList.remove("show"); setTimeout(()=>document.getElementById("pin-input").focus(),100); }
 }
@@ -525,28 +539,57 @@ function goBack() {
 
 // ── PIN ───────────────────────────────────────────────────────────
 // ── 教員マスタ ───────────────────────────────────────────────────
+// 教員マスタ（名前・メール表示用のみ。PINはFirebaseから取得）
 const TEACHERS = {
-  "7373": { id: "kawamura",  name: "河村",   email: "kawamurayj@nbu.ac.jp" },
-  "3986": { id: "otani",     name: "大谷",   email: "ootaniah@nbu.ac.jp" },
-  "2940": { id: "hashimoto", name: "橋本拓", email: "hashimototk@nbu.ac.jp" },
-  "7986": { id: "nabeta",    name: "鍋田",   email: "nabeta@nbu.ac.jp" },
+  "kawamura":  { name: "河村",   email: "kawamurayj@nbu.ac.jp" },
+  "otani":     { name: "大谷",   email: "ootaniah@nbu.ac.jp" },
+  "hashimoto": { name: "橋本拓", email: "hashimototk@nbu.ac.jp" },
+  "nabeta":    { name: "鍋田",   email: "nabeta@nbu.ac.jp" },
 };
-const ADMIN_PIN = "1234";
 let currentTeacher = null; // { id, name } or { id:"admin", name:"管理者" }
 
-function checkPin() {
+// メールアドレスから学籍番号を取得（例：s2633500@nbu.ac.jp → 202633500）
+function emailToStudentNo(email) {
+  if (!email) return null;
+  const match = email.match(/^s(\d+)@nbu\.ac\.jp$/);
+  if (!match) return null;
+  return "20" + match[1];
+}
+
+// 自分の学籍番号を取得
+function getMyStudentNo() {
+  return currentUser ? emailToStudentNo(currentUser.email) : null;
+}
+
+async function checkPin() {
   const pin = document.getElementById("pin-input").value;
-  if (pin === ADMIN_PIN) {
-    currentTeacher = { id: "admin", name: "管理者" };
+  const errEl = document.getElementById("pin-err");
+  errEl.classList.remove("show");
+
+  if (!pin) return;
+
+  try {
+    // FirebaseからPINを検証
+    const snap = await db.ref(`pins/${pin}`).once("value");
+    const teacherId = snap.val();
+
+    if (!teacherId) {
+      errEl.textContent = "PINが正しくありません";
+      errEl.classList.add("show");
+      document.getElementById("pin-input").value = "";
+      return;
+    }
+
+    if (teacherId === "admin") {
+      currentTeacher = { id: "admin", name: "管理者" };
+    } else {
+      const t = TEACHERS[teacherId];
+      currentTeacher = { id: teacherId, name: t ? t.name : teacherId };
+    }
     showPage("list");
-  } else if (TEACHERS[pin]) {
-    currentTeacher = TEACHERS[pin];
-    showPage("list");
-  } else {
-    const el = document.getElementById("pin-err");
-    el.textContent = "PINが正しくありません";
-    el.classList.add("show");
-    document.getElementById("pin-input").value = "";
+  } catch(e) {
+    errEl.textContent = "認証に失敗しました: " + e.message;
+    errEl.classList.add("show");
   }
 }
 function pinErr() { document.getElementById("pin-err").classList.remove("show"); }
@@ -706,9 +749,9 @@ function openEdit(idOrNull) {
   if (currentTeacher?.id === "admin") {
     checkField.style.display = "";
     const teacherIds = c?.teacherIds || (c?.teacherId ? [c.teacherId] : []);
-    checkboxes.innerHTML = Object.entries(TEACHERS).map(([pin, t]) => `
+    checkboxes.innerHTML = Object.entries(TEACHERS).map(([id, t]) => `
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer">
-        <input type="checkbox" value="${t.id}" ${teacherIds.includes(t.id) ? "checked" : ""}
+        <input type="checkbox" value="${id}" ${teacherIds.includes(id) ? "checked" : ""}
           style="width:16px;height:16px;margin:0;accent-color:var(--accent)">
         ${t.name}
       </label>`).join("");
@@ -1631,8 +1674,7 @@ async function forceStopAll() {
 }
 function getTeacherName(tid) {
   if (!tid || tid === "admin") return "管理者";
-  const t = Object.values(TEACHERS).find(t => t.id === tid);
-  return t ? t.name : tid;
+  return TEACHERS[tid]?.name || tid;
 }
 function cookieKey(courseId, idx) { return `registered_${courseId}_${idx}`; }
 function hasCookie(key) { return document.cookie.split(";").some(c => c.trim().startsWith(key + "=")); }
@@ -1647,11 +1689,12 @@ function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").re
 
 // ── 登録履歴確認（学生用） ──────────────────────────────────────
 function checkMyHistory() {
-  const no = document.getElementById("mc-no").value.trim();
+  const myNo = getMyStudentNo();
+  const no   = myNo || "";
   const errEl = document.getElementById("mc-err");
   errEl.classList.remove("show");
 
-  if (!no) { errEl.textContent = "学籍番号を入力してください"; errEl.classList.add("show"); return; }
+  if (!no) { errEl.textContent = "学籍番号が取得できません"; errEl.classList.add("show"); return; }
 
   // 全科目・全回をスキャンして該当学籍番号の登録を集める
   const found = []; // { courseName, sessionIdx, time }
