@@ -432,12 +432,24 @@ auth.onAuthStateChanged(async user => {
     logoutBtn.style.display = "";
     if (!listenersAttached) { attachDataListeners(); listenersAttached = true; }
 
-    // ログイン後はホーム画面へ（教員判定はPIN入力後に行う）
+    // Cloud Functionsで教員かどうかをサーバー側で確認
+    try {
+      const checkNbu = functions.httpsCallable("checkNbuDomain");
+      const result   = await checkNbu({});
+      // teachersリストに存在するか確認
+      const emailKey = user.email.replace(/\./g, "_");
+      const snap     = await db.ref(`teachers/${emailKey}`).once("value");
+      currentIsTeacher = snap.val() === true;
+    } catch(e) {
+      currentIsTeacher = false;
+    }
+
     currentTeacher = null;
     showPage("home");
   } else {
     currentUser = null;
-    currentTeacher = null;
+    currentTeacher    = null;
+    currentIsTeacher  = false;
     if (user) auth.signOut();
     logoutBtn.style.display = "none";
     showPage("gate");
@@ -457,6 +469,8 @@ async function loginWithGoogle() {
 }
 
 async function logoutStudent() {
+  currentTeacher   = null;
+  currentIsTeacher = false;
   await auth.signOut();
 }
 
@@ -521,9 +535,9 @@ function showPage(name, extra) {
   if (name === "session") openSession(extra);
   if (name === "student") { renderStudentCourses(); renderStudentStatus(); loadStudentHistory(); }
   if (name === "home") {
-    // NBUアカウントでログイン済みなら教員メニューボタンを表示
+    // サーバー側で確認した教員フラグで表示制御
     const teacherBtn = document.getElementById("teacher-mode-btn");
-    if (teacherBtn) teacherBtn.style.display = currentUser ? "" : "none";
+    if (teacherBtn) teacherBtn.style.display = currentIsTeacher ? "" : "none";
   }
   if (name === "mycheck") {
     document.getElementById("mc-err").classList.remove("show");
@@ -565,7 +579,8 @@ const TEACHERS = {
   "hashimoto": { name: "橋本拓", email: "hashimototk@nbu.ac.jp" },
   "nabeta":    { name: "鍋田",   email: "nabeta@nbu.ac.jp" },
 };
-let currentTeacher = null; // { id, name } or { id:"admin", name:"管理者" }
+let currentTeacher   = null;  // { id, name } or { id:"admin", name:"管理者" }
+let currentIsTeacher = false; // サーバー側で確認した教員フラグ
 
 // メールアドレスから学籍番号を取得（例：s2633500@nbu.ac.jp → 202633500）
 function emailToStudentNo(email) {
