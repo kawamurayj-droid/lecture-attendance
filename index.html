@@ -491,15 +491,23 @@ function attachDataListeners() {
 
 // attendance は教員ログイン後のみ購読開始
 let teacherListenersAttached = false;
-function attachTeacherListeners() {
-  if (teacherListenersAttached) return;
+function attachTeacherListeners(callback) {
+  if (teacherListenersAttached) {
+    if (callback) callback();
+    return;
+  }
   teacherListenersAttached = true;
+  let firstLoad = true;
   db.ref("attendance").on("value", snap => {
     allAttendance = snap.val() || {};
-    if (currentPage === "list") renderCourseList();
+    if (firstLoad) {
+      firstLoad = false;
+      if (callback) callback(); // 初回データ取得後にコールバック実行
+    } else {
+      if (currentPage === "list") renderCourseList();
+    }
   });
 }
-
 // ── ページ遷移 ────────────────────────────────────────────────────
 function showPage(name, extra) {
   prevPage = currentPage;
@@ -591,8 +599,7 @@ async function checkPin() {
       const t = TEACHERS[teacherId];
       currentTeacher = { id: teacherId, name: t ? t.name : teacherId };
     }
-    attachTeacherListeners();
-    showPage("list");
+    attachTeacherListeners(() => showPage("list"));
   } catch(e) {
     const msg = e.code === "functions/not-found"    ? "PINが正しくありません" :
                 e.code === "functions/permission-denied" ? "NBUアカウントのみ利用可能です" :
