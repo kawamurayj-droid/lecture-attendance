@@ -436,7 +436,12 @@ firebase.initializeApp({
   appId:             "1:1074810980063:web:c8c0280133354ccb618b6a",
 });
 const db        = firebase.database();
-const functions = firebase.app().functions("asia-northeast1");
+let   functions;
+try {
+  functions = firebase.app().functions("asia-northeast1");
+} catch(e) {
+  functions = firebase.functions();
+}
 
 // ── Google認証 ─────────────────────────────────────────────────
 const auth = firebase.auth();
