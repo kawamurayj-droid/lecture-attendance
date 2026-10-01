@@ -436,11 +436,24 @@ firebase.initializeApp({
   appId:             "1:1074810980063:web:c8c0280133354ccb618b6a",
 });
 const db        = firebase.database();
-let   functions;
-try {
-  functions = firebase.app().functions("asia-northeast1");
-} catch(e) {
-  functions = firebase.functions();
+// V2 Cloud FunctionsはURLを直接指定して呼び出す
+const FUNCTIONS_BASE = "https://asia-northeast1-lecture-attendance-90b9c.cloudfunctions.net";
+
+async function callFunction(name, data) {
+  const user = firebase.auth().currentUser;
+  if (!user) throw new Error("ログインが必要です");
+  const token = await user.getIdToken();
+  const res = await fetch(`${FUNCTIONS_BASE}/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
+    body: JSON.stringify({ data }),
+  });
+  const json = await res.json();
+  if (json.error) throw { code: "functions/" + json.error.status?.toLowerCase(), message: json.error.message };
+  return json;
 }
 
 // ── Google認証 ─────────────────────────────────────────────────
@@ -459,8 +472,7 @@ auth.onAuthStateChanged(async user => {
 
     // Cloud Functionsで教員かどうかをサーバー側で確認
     try {
-      const checkNbu = functions.httpsCallable("checkNbuDomain");
-      const result   = await checkNbu({});
+      const result   = await callFunction("checkNbuDomain", {});
       // teachersリストに存在するか確認
       const emailKey = user.email.replace(/\./g, "_");
       const snap     = await db.ref(`teachers/${emailKey}`).once("value");
@@ -651,9 +663,8 @@ async function checkPin() {
 
   try {
     // Cloud Functions経由でPINを検証（サーバー側でPINを処理）
-    const verifyPin = functions.httpsCallable("verifyPin");
-    const result    = await verifyPin({ pin });
-    const teacherId = result.data.teacherId;
+    const result    = await callFunction("verifyPin", { pin });
+    const teacherId = result.result?.teacherId || result.teacherId;
 
     if (teacherId === "admin") {
       currentTeacher = { id: "admin", name: "管理者" };
