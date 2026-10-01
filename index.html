@@ -655,11 +655,15 @@ function getMyStudentNo() {
 }
 
 async function checkPin() {
-  const pin   = document.getElementById("pin-input").value;
-  const errEl = document.getElementById("pin-err");
+  const pin    = document.getElementById("pin-input").value;
+  const errEl  = document.getElementById("pin-err");
+  const btn    = document.querySelector("#page-pin .btn-pri");
   errEl.classList.remove("show");
 
   if (!pin) return;
+
+  // ローディング中はボタンを無効化
+  if (btn) { btn.disabled = true; btn.textContent = "認証中..."; }
 
   try {
     // Cloud Functions経由でPINを検証（サーバー側でPINを処理）
@@ -672,14 +676,20 @@ async function checkPin() {
       const t = TEACHERS[teacherId];
       currentTeacher = { id: teacherId, name: t ? t.name : teacherId };
     }
-    attachTeacherListeners(() => showPage("list"));
+
+    // attendance購読完了後に画面遷移（ボタン操作可能になってから表示）
+    attachTeacherListeners(() => {
+      if (btn) { btn.disabled = false; btn.textContent = "認証"; }
+      showPage("list");
+    });
   } catch(e) {
-    const msg = e.code === "functions/not-found"    ? "PINが正しくありません" :
-                e.code === "functions/permission-denied" ? "NBUアカウントのみ利用可能です" :
+    const msg = e.code === "functions/not-found"         ? "PINが正しくありません" :
+                e.code === "functions/permission-denied"  ? "NBUアカウントのみ利用可能です" :
                 "認証に失敗しました: " + e.message;
     errEl.textContent = msg;
     errEl.classList.add("show");
     document.getElementById("pin-input").value = "";
+    if (btn) { btn.disabled = false; btn.textContent = "認証"; }
   }
 }
 function pinErr() { document.getElementById("pin-err").classList.remove("show"); }
