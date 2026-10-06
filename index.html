@@ -465,15 +465,7 @@ let listenersAttached = false;
 
 
 
-// リダイレクト後の結果処理
-let redirectHandled = false;
-auth.getRedirectResult().then(result => {
-  redirectHandled = true;
-  if (result?.user && !result.user.email.endsWith("@nbu.ac.jp")) {
-    auth.signOut();
-    alert("NBUのGoogleアカウントでログインしてください");
-  }
-}).catch(() => { redirectHandled = true; });
+
 
 auth.onAuthStateChanged(async user => {
   const logoutBtn = document.getElementById("header-logout-btn");
@@ -494,40 +486,25 @@ auth.onAuthStateChanged(async user => {
 
     currentTeacher = null;
     showPage("home");
-  } else if (user && user.email && !user.email.endsWith("@nbu.ac.jp")) {
-    // NBU以外のアカウント → サインアウト
-    currentUser = null;
-    currentTeacher   = null;
-    currentIsTeacher = false;
-    await auth.signOut();
-    logoutBtn.style.display = "none";
-    alert("NBUのGoogleアカウントでログインしてください");
-    showPage("gate");
   } else {
-    // 未ログイン（リダイレクト処理中も含む）
-    currentUser = null;
+    currentUser      = null;
     currentTeacher   = null;
     currentIsTeacher = false;
+    if (user) auth.signOut(); // NBU以外のアカウントはサインアウト
     logoutBtn.style.display = "none";
     showPage("gate");
   }
 });
 
-function isIOS() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-}
-
 async function loginWithGoogle() {
   try {
-    if (isIOS()) {
-      // iOS SafariはリダイレクトLogin
-      await auth.signInWithRedirect(googleProvider);
-    } else {
-      // その他（Chrome等）はポップアップ
-      await auth.signInWithPopup(googleProvider);
-    }
+    await auth.signInWithPopup(googleProvider);
   } catch (e) {
-    alert("ログインに失敗しました: " + e.message);
+    if (e.code === "auth/popup-blocked") {
+      alert("ポップアップがブロックされました。\nSafariの設定 → ポップアップをブロック → オフ にしてから再度お試しください。");
+    } else {
+      alert("ログインに失敗しました: " + e.message);
+    }
   }
 }
 
