@@ -467,6 +467,19 @@ let listenersAttached = false;
 
 
 
+// リダイレクト後の結果処理（iOS/iPadOS用）
+if (sessionStorage.getItem("redirecting")) {
+  sessionStorage.removeItem("redirecting");
+  auth.getRedirectResult().then(result => {
+    if (result?.user && !result.user.email.endsWith("@nbu.ac.jp")) {
+      auth.signOut();
+      alert("NBUのGoogleアカウントでログインしてください");
+    }
+  }).catch(e => {
+    console.warn("getRedirectResult:", e.code);
+  });
+}
+
 auth.onAuthStateChanged(async user => {
   const logoutBtn = document.getElementById("header-logout-btn");
   if (user && user.email && user.email.endsWith("@nbu.ac.jp")) {
@@ -496,15 +509,23 @@ auth.onAuthStateChanged(async user => {
   }
 });
 
+function isIOSorIPad() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 async function loginWithGoogle() {
   try {
-    await auth.signInWithPopup(googleProvider);
-  } catch (e) {
-    if (e.code === "auth/popup-blocked") {
-      alert("ポップアップがブロックされました。\nSafariの設定 → ポップアップをブロック → オフ にしてから再度お試しください。");
+    if (isIOSorIPad()) {
+      // iOS/iPadOS はリダイレクト方式（ポップアップがブロックされるため）
+      sessionStorage.setItem("redirecting", "1");
+      await auth.signInWithRedirect(googleProvider);
     } else {
-      alert("ログインに失敗しました: " + e.message);
+      await auth.signInWithPopup(googleProvider);
     }
+  } catch (e) {
+    sessionStorage.removeItem("redirecting");
+    alert("ログインに失敗しました: " + e.message);
   }
 }
 
