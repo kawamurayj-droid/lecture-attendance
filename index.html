@@ -470,9 +470,8 @@ auth.getRedirectResult().then(result => {
     alert("NBUのGoogleアカウントでログインしてください");
   }
 }).catch(e => {
-  if (e.code !== "auth/no-current-user") {
-    console.warn("Redirect result error:", e.message);
-  }
+  // エラーは無視（ループ防止）
+  console.warn("Redirect result:", e.code);
 });
 
 auth.onAuthStateChanged(async user => {
@@ -485,7 +484,6 @@ auth.onAuthStateChanged(async user => {
     // Cloud Functionsで教員かどうかをサーバー側で確認
     try {
       const result   = await callFunction("checkNbuDomain", {});
-      // teachersリストに存在するか確認
       const emailKey = user.email.replace(/\./g, "_");
       const snap     = await db.ref(`teachers/${emailKey}`).once("value");
       currentIsTeacher = snap.val() === true;
@@ -495,11 +493,20 @@ auth.onAuthStateChanged(async user => {
 
     currentTeacher = null;
     showPage("home");
-  } else {
+  } else if (user && user.email && !user.email.endsWith("@nbu.ac.jp")) {
+    // NBU以外のアカウント → サインアウト
     currentUser = null;
-    currentTeacher    = null;
-    currentIsTeacher  = false;
-    if (user) auth.signOut();
+    currentTeacher   = null;
+    currentIsTeacher = false;
+    await auth.signOut();
+    logoutBtn.style.display = "none";
+    alert("NBUのGoogleアカウントでログインしてください");
+    showPage("gate");
+  } else {
+    // 未ログイン（リダイレクト処理中も含む）
+    currentUser = null;
+    currentTeacher   = null;
+    currentIsTeacher = false;
     logoutBtn.style.display = "none";
     showPage("gate");
   }
