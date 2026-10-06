@@ -457,8 +457,8 @@ async function callFunction(name, data) {
 }
 
 // ── Google認証 ─────────────────────────────────────────────────
-const auth = firebase.auth();
-const googleProvider = new firebase.auth.GoogleAuthProvider();
+var auth = firebase.auth();
+var googleProvider = new firebase.auth.GoogleAuthProvider();
 googleProvider.setCustomParameters({ hd: "nbu.ac.jp" }); // NBUドメインを候補に絞る
 let currentUser = null; // ログイン済みならFirebaseのuser情報が入る
 let listenersAttached = false;
