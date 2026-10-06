@@ -457,11 +457,20 @@ async function callFunction(name, data) {
 }
 
 // ── Google認証 ─────────────────────────────────────────────────
-var auth = firebase.auth();
-var googleProvider = new firebase.auth.GoogleAuthProvider();
+const auth = firebase.auth();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
 googleProvider.setCustomParameters({ hd: "nbu.ac.jp" }); // NBUドメインを候補に絞る
-let currentUser = null; // ログイン済みならFirebaseのuser情報が入る
+let currentUser = null;
 let listenersAttached = false;
+let authInitialized = false;
+
+// リダイレクト後の結果処理
+auth.getRedirectResult().then(result => {
+  if (result?.user && !result.user.email.endsWith("@nbu.ac.jp")) {
+    auth.signOut();
+    alert("NBUのGoogleアカウントでログインしてください");
+  }
+}).catch(() => {});
 
 
 
@@ -495,17 +504,23 @@ auth.onAuthStateChanged(async user => {
     currentIsTeacher = false;
     if (user) auth.signOut(); // NBU以外のアカウントはサインアウト
     logoutBtn.style.display = "none";
-    showPage("gate");
+    if (authInitialized) showPage("gate"); // 初回はスキップ（リダイレクト処理中のループ防止）
   }
+  authInitialized = true;
 });
 
 async function loginWithGoogle() {
   try {
     await auth.signInWithPopup(googleProvider);
   } catch (e) {
-    if (e.code === "auth/popup-blocked") {
-      alert("ポップアップがブロックされています。\nSafariの場合：設定 → Safari → ポップアップをブロック → オフ\nChromeの場合：アドレスバーのポップアップブロックアイコンをタップして許可してください。");
-    } else {
+    if (e.code === "auth/popup-blocked" || e.code === "auth/popup-closed-by-user") {
+      // ポップアップがブロックされた場合は自動でリダイレクト方式に切り替え
+      try {
+        await auth.signInWithRedirect(googleProvider);
+      } catch(e2) {
+        alert("ログインに失敗しました: " + e2.message);
+      }
+    } else if (e.code !== "auth/cancelled-popup-request") {
       alert("ログインに失敗しました: " + e.message);
     }
   }
