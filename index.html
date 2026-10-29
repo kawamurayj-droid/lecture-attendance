@@ -115,6 +115,11 @@
   .page { display: none; }
   .page.active { display: block; }
   .flex-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+  /* ── exit confirm ── */
+  .exit-box { background: #fff3cd; border: 2px solid #ffc107; border-radius: 12px; padding: 22px; text-align: center; }
+  .exit-box .code-big { color: #c97a00; }
+  .exit-confirm-badge { background: #ffc10722; border: 1px solid #ffc10766; color: #c97a00; }
 </style>
 </head>
 <body>
@@ -280,15 +285,21 @@
       <div class="flex-row" style="margin-bottom:14px">
         <p class="sec" style="margin:0" id="session-round-label">第1回　受付コード</p>
         <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <div id="start-controls" style="display:flex;gap:8px;align-items:center">
+          <div id="start-controls" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <div style="display:flex;align-items:center;gap:6px">
               <label style="font-size:11px;color:var(--muted);white-space:nowrap">終了時刻</label>
               <input type="time" id="auto-stop-time" style="width:100px;margin:0;padding:6px 10px;font-size:12px">
             </div>
+            <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap">
+              <input type="checkbox" id="exit-confirm-check" style="width:14px;height:14px;margin:0;accent-color:var(--yellow)">
+              退室確認あり
+            </label>
             <button class="btn btn-succ btn-sm" onclick="startSession()">受付開始</button>
           </div>
-          <div id="stop-controls" style="display:none;align-items:center;gap:8px">
+          <div id="stop-controls" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
             <span id="auto-stop-label" style="font-size:11px;color:var(--muted)"></span>
+            <button class="btn btn-sm" id="exit-confirm-btn" onclick="startExitConfirm()" style="display:none;background:#ffc107;color:#000;font-weight:700">🚪 退室確認を開始</button>
+            <button class="btn btn-sm" id="exit-confirm-active-label" style="display:none;background:#ffc10733;color:#c97a00;border:1px solid #ffc10766;cursor:default">🚪 退室確認中</button>
             <button class="btn btn-del btn-sm" onclick="stopSession()">受付終了</button>
           </div>
         </div>
@@ -300,6 +311,13 @@
         <div class="code-big" id="code-display">----</div>
         <div class="code-sub" id="timer-text">次の更新まで 60 秒</div>
         <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%"></div></div>
+      </div>
+      <!-- 退室確認コード表示（退室確認開始後のみ） -->
+      <div class="exit-box" id="exit-code-box" style="display:none;margin-top:14px">
+        <div style="font-size:11px;color:#c97a00;letter-spacing:2px;margin-bottom:8px;font-weight:700">🚪 退室確認コード</div>
+        <div class="code-big" id="exit-code-display">----</div>
+        <div class="code-sub" style="color:#c97a00;margin-top:8px">このコードを板書・投影してください</div>
+        <div style="font-size:11px;color:#c97a00;margin-top:6px">未確認の学生は受付終了時に △ 欠席扱いになります</div>
       </div>
     </div>
 
@@ -417,6 +435,24 @@
         <button class="btn btn-pri btn-full" onclick="submitAttendance()">出席登録</button>
       </div>
     </div>
+    <!-- 退室確認カード（退室確認モード開始後に表示） -->
+    <div class="card" id="exit-confirm-card" style="display:none">
+      <p class="sec">🚪 退室確認</p>
+      <div class="alert alert-err"  id="exit-err"></div>
+      <div class="alert alert-ok"   id="exit-ok"></div>
+      <div style="background:#fff3cd;border:1px solid #ffc10766;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#c97a00;line-height:1.6">
+        先生が黒板・スクリーンに表示している<br>
+        <b>退室確認コード（4桁）</b>を入力してください。<br>
+        <span style="font-size:11px">※ 未入力で退室した場合は欠席扱いになります</span>
+      </div>
+      <div class="field"><label class="lbl">退室確認コード（4桁）</label>
+        <input id="exit-code-input" maxlength="4" placeholder="0000" class="pin-input"
+          inputmode="numeric"
+          oninput="normalizeCode(this)"
+          onkeydown="if(event.key==='Enter')submitExitConfirm()">
+      </div>
+      <button class="btn btn-full" onclick="submitExitConfirm()" style="background:#ffc107;color:#000;font-weight:700">退室確認を送信</button>
+    </div>
     <div class="card" id="active-courses-card" style="display:none">
       <p class="sec">現在受付中の科目</p>
       <div id="active-courses-body"></div>
@@ -509,6 +545,21 @@ auth.onAuthStateChanged(async user => {
   authInitialized = true;
 });
 
+function authErrMsg(e) {
+  const map = {
+    "auth/network-request-failed":        "ネットワークエラーです。通信状況を確認して再度お試しください。",
+    "auth/too-many-requests":             "しばらく時間をおいてから再度お試しください。",
+    "auth/user-disabled":                 "このアカウントは無効化されています。",
+    "auth/account-exists-with-different-credential": "このメールアドレスは別の方法で登録されています。",
+    "auth/invalid-credential":            "認証情報が無効です。再度ログインしてください。",
+    "auth/popup-blocked":                 "ポップアップがブロックされました。リダイレクト方式に切り替えます。",
+    "auth/popup-closed-by-user":          "ログインウィンドウが閉じられました。再度お試しください。",
+    "auth/cancelled-popup-request":       "ログインがキャンセルされました。再度お試しください。",
+    "auth/operation-not-supported-in-this-environment": "この環境ではポップアップが使用できません。",
+  };
+  return map[e.code] || "ログインに失敗しました。再度お試しください。";
+}
+
 async function loginWithGoogle() {
   try {
     await auth.signInWithPopup(googleProvider);
@@ -521,10 +572,10 @@ async function loginWithGoogle() {
       try {
         await auth.signInWithRedirect(googleProvider);
       } catch(e2) {
-        alert("ログインに失敗しました: " + e2.message);
+        alert(authErrMsg(e2));
       }
     } else {
-      alert("ログインに失敗しました: " + e.message);
+      alert(authErrMsg(e));
     }
   }
 }
@@ -787,7 +838,7 @@ function renderCourseList() {
             ${c.period ? `<span class="tag" style="background:#88888822;color:#666;border:1px solid #88888833">🕐 ${c.period}限</span>` : ""}
             ${c.requiredSessions ? `<span class="tag" style="background:#4f5bd522;color:var(--accent);border:1px solid #4f5bd533">✅ ${c.requiredSessions}回以上で認定</span>` : ""}
             ${c.lateMinutes ? `<span class="tag tag-yellow">⏱ ${c.lateMinutes}分超で遅刻</span>` : ""}
-            ${active ? `<span class="tag tag-red">● 受付中（第${Number(activeSes[id].sessionIdx)+1}回）</span>` : ""}
+            ${active && active.sessionIdx != null ? `<span class="tag tag-red">● 受付中（第${Number(active.sessionIdx)+1}回）</span>` : ""}
             ${currentTeacher?.id === "admin" ? `<span class="tag" style="background:#88888822;color:#888;border:1px solid #88888833">🔑 ${(c.teacherIds||[c.teacherId||""]).map(tid=>getTeacherName(tid)).join("・")}</span>` : ""}
           </div>
           ${attSummary}
@@ -1001,6 +1052,30 @@ function renderSessionCode() {
     document.getElementById("auto-stop-label").textContent = "";
   }
 
+  // 退室確認ボタン制御
+  const exitBtn       = document.getElementById("exit-confirm-btn");
+  const exitActiveLabel = document.getElementById("exit-confirm-active-label");
+  const exitCodeBox   = document.getElementById("exit-code-box");
+  if (active && ses.exitConfirmMode) {
+    // 退室確認モードON
+    if (ses.exitConfirmActive) {
+      // 退室確認中
+      exitBtn.style.display       = "none";
+      exitActiveLabel.style.display = "inline-flex";
+      exitCodeBox.style.display   = "";
+      document.getElementById("exit-code-display").textContent = ses.exitCode || "----";
+    } else {
+      // 退室確認前（ボタンを表示）
+      exitBtn.style.display       = "inline-flex";
+      exitActiveLabel.style.display = "none";
+      exitCodeBox.style.display   = "none";
+    }
+  } else {
+    exitBtn.style.display       = "none";
+    exitActiveLabel.style.display = "none";
+    exitCodeBox.style.display   = "none";
+  }
+
   stopTimerLoop();
   if (active) {
     document.getElementById("code-display").textContent = ses.code;
@@ -1029,6 +1104,10 @@ function startTimerLoop(ses) {
     // 自動終了チェック
     if (ses.autoStopAt && now >= ses.autoStopAt) {
       stopTimerLoop();
+      // 退室確認モードが有効だった場合、未確認の学生を△に変更
+      if (ses.exitConfirmActive) {
+        await downgradeUnconfirmed(sessionCourseId, Number(ses.sessionIdx));
+      }
       await db.ref(`activeSessions/${sessionCourseId}`).remove();
       delete activeSes[sessionCourseId]; // ローカル状態を即時反映（バッジが残るのを防ぐ）
       return;
@@ -1049,11 +1128,13 @@ function stopTimerLoop() { if (timerInterval) { clearInterval(timerInterval); ti
 
 async function startSession() {
   const timeVal = document.getElementById("auto-stop-time").value;
+  const withExit = document.getElementById("exit-confirm-check")?.checked || false;
   const data = {
-    sessionIdx:    Number(sessionSelIdx),
-    code:          genCode(),
-    codeIssuedAt:  Date.now(),
-    startedAt:     Date.now(), // 遅刻判定用
+    sessionIdx:       Number(sessionSelIdx),
+    code:             genCode(),
+    codeIssuedAt:     Date.now(),
+    startedAt:        Date.now(), // 遅刻判定用
+    exitConfirmMode:  withExit,   // 退室確認モード設定
   };
   if (timeVal) {
     data.autoStopTime = timeVal; // "HH:MM" 形式
@@ -1067,10 +1148,50 @@ async function startSession() {
   }
   await db.ref(`activeSessions/${sessionCourseId}`).set(data);
 }
+
+// 退室確認コードを発行して退室確認を開始
+async function startExitConfirm() {
+  const ses = activeSes[sessionCourseId];
+  if (!ses) { alert("受付中のセッションがありません"); return; }
+  if (!confirm("退室確認を開始しますか？\n黒板・スクリーンに表示されたコードを学生に入力させてください。\n\n※ 受付終了時、未入力の学生は△（欠席）扱いになります。")) return;
+
+  const exitCode = genCode();
+  await db.ref(`activeSessions/${sessionCourseId}`).update({
+    exitCode,
+    exitCodeIssuedAt: Date.now(),
+    exitConfirmActive: true,
+  });
+}
+
 async function stopSession() {
   stopTimerLoop();
+  const ses = activeSes[sessionCourseId];
+
+  // 退室確認モードが有効だった場合、未確認の学生を△（欠席）に変更
+  if (ses?.exitConfirmActive) {
+    await downgradeUnconfirmed(sessionCourseId, Number(ses.sessionIdx));
+  }
+
   await db.ref(`activeSessions/${sessionCourseId}`).remove();
   delete activeSes[sessionCourseId]; // ローカル状態を即時反映（バッジが残るのを防ぐ）
+}
+
+// 退室確認未入力の学生を △ に変更
+async function downgradeUnconfirmed(courseId, sessionIdx) {
+  const snap = await db.ref(`attendance/${courseId}/${sessionIdx}`).once("value");
+  const records = snap.val();
+  if (!records) return;
+
+  const updates = {};
+  Object.entries(records).forEach(([rid, r]) => {
+    // present（○出席）で退室確認未入力の学生のみ対象（遅刻は元から△なので除外）
+    if (r.status === "present" && !r.exitConfirmed) {
+      updates[`attendance/${courseId}/${sessionIdx}/${rid}/status`] = "early_leave";
+    }
+  });
+  if (Object.keys(updates).length > 0) {
+    await db.ref().update(updates);
+  }
 }
 
 // 出席者一覧
@@ -1126,14 +1247,15 @@ function renderAttendance(allData) {
     <table>
       <thead><tr><th>学籍番号</th><th>登録時刻</th><th>区分</th><th>IPアドレス</th><th></th></tr></thead>
       <tbody>${records.map(([rid, r]) => {
-        const isLate   = r.status === "late";
-        const statusBadge = isLate
-          ? `<span class="tag tag-yellow">△ 遅刻</span>`
-          : `<span class="tag tag-green">○ 出席</span>`;
+        const statusBadge =
+          r.status === "late"        ? `<span class="tag tag-yellow">△ 遅刻</span>` :
+          r.status === "early_leave" ? `<span class="tag tag-red">△ 早退</span>` :
+                                       `<span class="tag tag-green">○ 出席</span>`;
+        const exitMark = r.exitConfirmed ? `<span style="font-size:11px;color:var(--green)">🚪✓</span>` : "";
         return `<tr>
           <td>${esc(r.studentNo)}</td>
           <td>${fmtTime(r.time)}</td>
-          <td>${statusBadge}</td>
+          <td>${statusBadge} ${exitMark}</td>
           <td style="font-size:11px;color:var(--muted)">${esc(r.ip||"―")}</td>
           <td><button class="btn btn-del btn-sm" onclick="deleteRecord('${rid}')">削除</button></td>
         </tr>`;
@@ -1148,8 +1270,9 @@ async function deleteRecord(rid) {
 
 function exportCSV() {
   const rows = window._lastRecords || [];
-  const csv  = "\uFEFF学籍番号,登録時刻,区分,IPアドレス\n" +
-    rows.map(r => `${r.studentNo},${fmtTime(r.time)},${r.status==="late"?"遅刻":"出席"},${r.ip||""}`).join("\n");
+  const statusLabel = r => r.status === "late" ? "遅刻" : r.status === "early_leave" ? "早退" : "出席";
+  const csv  = "\uFEFF学籍番号,登録時刻,区分,退室確認,IPアドレス\n" +
+    rows.map(r => `${r.studentNo},${fmtTime(r.time)},${statusLabel(r)},${r.exitConfirmed?"済":"―"},${r.ip||""}`).join("\n");
   const a    = document.createElement("a");
   a.href     = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
   a.download = `出席_第${sessionSelIdx+1}回.csv`;
@@ -1174,7 +1297,7 @@ function exportUPCSV() {
     const isValid = !isNaN(d.getTime());
     const dd = isValid ? d : new Date();
     const implDate = `${dd.getFullYear()}/${dd.getMonth()+1}/${dd.getDate()}`;
-    const upStatus = r.status === "late" ? "2" : "0"; // 0:出席 2:遅刻
+    const upStatus = r.status === "late" ? "2" : r.status === "early_leave" ? "3" : "0"; // 0:出席 2:遅刻 3:欠席（早退）
     return `${courseCode},${course.name},${r.studentNo},,,,${implDate},${period},${upStatus}`;
   });
 
@@ -1217,7 +1340,7 @@ function exportRateCSV() {
     Object.values(sessionData).forEach(r => {
       if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { attended: new Set(), lateSet: new Set(), name: "" };
       studentMap[r.studentNo].attended.add(Number(idx));
-      if (r.status === "late") studentMap[r.studentNo].lateSet.add(Number(idx));
+      if (r.status === "late" || r.status === "early_leave") studentMap[r.studentNo].lateSet.add(Number(idx));
     });
   });
 
@@ -1285,7 +1408,7 @@ async function exportAllRateCSV() {
       Object.values(sessionData).forEach(r => {
         if (!studentMap[r.studentNo]) studentMap[r.studentNo] = { attended: new Set(), lateSet: new Set() };
         studentMap[r.studentNo].attended.add(Number(idx));
-        if (r.status === "late") studentMap[r.studentNo].lateSet.add(Number(idx));
+        if (r.status === "late" || r.status === "early_leave") studentMap[r.studentNo].lateSet.add(Number(idx));
       });
     });
 
@@ -1358,13 +1481,51 @@ function renderStudentStatus() {
   const id  = document.getElementById("stu-course").value;
   const el  = document.getElementById("stu-status");
   const ses = id ? activeSes[id] : null;
-  if (!id)  { el.className="alert alert-info"; el.style.display="none"; el.textContent=""; return; }
+  if (!id)  { el.className="alert alert-info"; el.style.display="none"; el.textContent=""; renderExitConfirmCard(null, null); return; }
   el.style.display = "block";
   if (ses)  { el.className="alert alert-info show"; el.textContent=`第${Number(ses.sessionIdx)+1}回　受付中`; }
   else      { el.className="alert alert-err show";  el.textContent="この科目は現在受付中ではありません"; }
 
   // 受付中科目は選択肢に統合したのでカードは非表示
   document.getElementById("active-courses-card").style.display = "none";
+
+  // 退室確認カードの表示制御
+  renderExitConfirmCard(id, ses);
+}
+
+// 退室確認カードを表示するかどうか判定・描画
+function renderExitConfirmCard(courseId, ses) {
+  const card = document.getElementById("exit-confirm-card");
+  if (!card) return;
+
+  // 退室確認が有効（先生が開始ボタンを押した）かつ科目受付中の場合のみ表示
+  if (!courseId || !ses || !ses.exitConfirmActive) {
+    card.style.display = "none";
+    return;
+  }
+
+  // 既に退室確認済みかどうかを localStorage で確認
+  const exitKey = exitCookieKey(courseId, Number(ses.sessionIdx));
+  if (hasExitCookie(exitKey)) {
+    // 退室確認済みのメッセージ
+    card.style.display = "";
+    document.getElementById("exit-err").classList.remove("show");
+    const okEl = document.getElementById("exit-ok");
+    okEl.textContent = "退室確認済みです ✓";
+    okEl.classList.add("show");
+    document.getElementById("exit-code-input").style.display = "none";
+    card.querySelector(".btn").style.display = "none";
+    return;
+  }
+
+  // 未確認 → 入力フォームを表示
+  card.style.display = "";
+  document.getElementById("exit-ok").classList.remove("show");
+  document.getElementById("exit-err").classList.remove("show");
+  const input = document.getElementById("exit-code-input");
+  if (input) input.style.display = "";
+  const btn = card.querySelector(".btn");
+  if (btn) btn.style.display = "";
 }
 
 function onCourseSelect() {
@@ -1803,6 +1964,75 @@ function renderRoster() {
     </table>${more}`;
 }
 
+// 退室確認コードを送信
+async function submitExitConfirm() {
+  const courseId  = document.getElementById("stu-course").value;
+  const inputCode = document.getElementById("exit-code-input").value.replace(/\s/g,"").replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+  const errEl     = document.getElementById("exit-err");
+  const okEl      = document.getElementById("exit-ok");
+  errEl.classList.remove("show"); okEl.classList.remove("show");
+
+  if (!courseId) { errEl.textContent = "科目が選択されていません"; errEl.classList.add("show"); return; }
+  const ses = activeSes[courseId];
+  if (!ses || !ses.exitConfirmActive) { errEl.textContent = "退室確認はまだ開始されていません"; errEl.classList.add("show"); return; }
+  if (!inputCode) { errEl.textContent = "退室確認コードを入力してください"; errEl.classList.add("show"); return; }
+  if (ses.exitCode !== inputCode) { errEl.textContent = "退室確認コードが違います"; errEl.classList.add("show"); return; }
+
+  // 自分の出席レコードに exitConfirmed を書き込む
+  // attendance_lock から自分の学籍番号を特定→ attendance のレコードを更新
+  const sessionIdx = Number(ses.sessionIdx);
+  let myStudentNo = null;
+  try {
+    // stu-no フィールドに残っている学籍番号、またはローカルストレージから取得
+    const stuNoEl = document.getElementById("stu-no");
+    myStudentNo = (stuNoEl && stuNoEl.value.trim()) || "";
+    if (!myStudentNo) {
+      try { myStudentNo = localStorage.getItem("stu_no") || ""; } catch(e) {}
+    }
+  } catch(e) {}
+
+  if (!myStudentNo || !/^[0-9]{9}$/.test(myStudentNo)) {
+    errEl.textContent = "学籍番号が確認できません。出席登録画面から学籍番号を入力してください。";
+    errEl.classList.add("show"); return;
+  }
+
+  // attendance から自分のレコードを検索して exitConfirmed を書き込む
+  try {
+    const attSnap = await db.ref(`attendance/${courseId}/${sessionIdx}`).once("value");
+    const records = attSnap.val() || {};
+    let myRid = null;
+    Object.entries(records).forEach(([rid, r]) => {
+      if (r.studentNo === myStudentNo) myRid = rid;
+    });
+
+    if (!myRid) {
+      errEl.textContent = "出席登録が見つかりません。先に出席登録してください。";
+      errEl.classList.add("show"); return;
+    }
+
+    await db.ref(`attendance/${courseId}/${sessionIdx}/${myRid}/exitConfirmed`).set(true);
+
+    // cookie に記録（再送信防止）
+    setExitCookie(exitCookieKey(courseId, sessionIdx));
+
+    okEl.textContent = "退室確認を送信しました ✓";
+    okEl.classList.add("show");
+    document.getElementById("exit-code-input").style.display = "none";
+    document.getElementById("exit-confirm-card").querySelector(".btn").style.display = "none";
+    document.getElementById("exit-code-input").value = "";
+  } catch(e) {
+    errEl.textContent = "送信に失敗しました: " + e.message;
+    errEl.classList.add("show");
+  }
+}
+
+function exitCookieKey(courseId, idx) { return `exit_confirmed_${courseId}_${idx}`; }
+function hasExitCookie(key) { return document.cookie.split(";").some(c => c.trim().startsWith(key + "=")); }
+function setExitCookie(key) {
+  const expires = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toUTCString();
+  document.cookie = `${key}=1; expires=${expires}; path=/; SameSite=Lax`;
+}
+
 async function forceStopAll() {
   const count = Object.keys(activeSes).length;
   if (count === 0) { alert("現在受付中の科目はありません"); return; }
@@ -1865,9 +2095,9 @@ async function checkMyHistory() {
     resultsEl.innerHTML = Object.entries(byCourse).map(([courseName, data]) => {
       const sorted = data.sessions.sort((a,b) => a.sessionIdx - b.sessionIdx);
       const rows = sorted.map(s => {
-        const badge = s.status === "late"
-          ? `<span class="tag tag-yellow">△ 遅刻</span>`
-          : `<span class="tag tag-green">○ 出席</span>`;
+        const badge = s.status === "late"         ? `<span class="tag tag-yellow">△ 遅刻</span>`
+                      : s.status === "early_leave" ? `<span class="tag tag-red">△ 早退</span>`
+                                                   : `<span class="tag tag-green">○ 出席</span>`;
         return `<tr><td>第${s.sessionIdx+1}回</td><td>${fmtDate(s.time)} ${fmtTime(s.time)}</td><td>${badge}</td></tr>`;
       }).join("");
       return `<div class="card">
