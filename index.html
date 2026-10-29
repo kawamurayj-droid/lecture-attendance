@@ -607,7 +607,13 @@ function attachDataListeners() {
     if (currentPage === "session") renderSessionCourse();
   });
   db.ref("activeSessions").on("value", snap => {
-    activeSes = snap.val() || {};
+    const raw = snap.val() || {};
+    // courses に存在しないキーは除外（削除漏れの孤立データを無視）
+    activeSes = Object.fromEntries(
+      Object.entries(raw).filter(([id]) => courses[id])
+    );
+    // courses がまだ未ロードの場合は全データを一旦保持（courses ロード後に再評価される）
+    if (Object.keys(courses).length === 0) activeSes = raw;
     if (currentPage === "session") renderSessionCode();
     if (currentPage === "student") renderStudentStatus();
     if (currentPage === "list")    renderCourseList();
@@ -1469,7 +1475,7 @@ function renderStudentCourses() {
   } else {
     sel.innerHTML = `<option value="">-- 科目を選択 --</option>` +
       activeEntries.map(([id, c]) =>
-        `<option value="${id}">${esc(c.name)}　第${activeSes[id].sessionIdx+1}回</option>`
+        `<option value="${id}">${esc(c.name)}${activeSes[id].sessionIdx != null ? `　第${Number(activeSes[id].sessionIdx)+1}回` : ""}</option>`
       ).join("");
   }
   // 以前選択していた科目が受付中なら維持、そうでなければリセット
