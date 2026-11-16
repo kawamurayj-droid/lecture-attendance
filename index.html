@@ -250,24 +250,6 @@
         <input id="edit-late" type="number" min="1" max="90" placeholder="例：10（空欄で遅刻なし）">
         <div style="font-size:11px;color:var(--muted);margin-top:4px">受付開始から指定分数を超えた登録を「遅刻」として記録します</div>
       </div>
-      <div class="field">
-        <label class="lbl">不正防止設定</label>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-            <input type="radio" name="fraud-mode" value="none" id="fraud-none" checked
-              onchange="updateFraudUI()" style="width:16px;height:16px;margin:0;accent-color:var(--accent)">
-            なし（これまで通り）
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-            <input type="radio" name="fraud-mode" value="gps" id="fraud-gps"
-              onchange="updateFraudUI()" style="width:16px;height:16px;margin:0;accent-color:var(--accent)">
-            GPS記録（位置情報収集）
-          </label>
-          <div id="fraud-gps-note" style="display:none;margin-left:24px;font-size:11px;color:var(--muted)">
-            出席登録時に学生の位置情報（緯度・経度）を記録します。許可しない場合は登録できません。
-          </div>
-        </div>
-      </div>
       <div class="flex-row" style="margin-top:6px">
         <button class="btn btn-pri" onclick="saveCourse()">保存</button>
         <button class="btn btn-sec" onclick="showPage('list')">キャンセル</button>
@@ -312,13 +294,6 @@
               <input type="checkbox" id="exit-confirm-check" style="width:14px;height:14px;margin:0;accent-color:var(--yellow)">
               退室確認あり
             </label>
-            <div style="display:flex;align-items:center;gap:6px">
-              <label style="font-size:11px;color:var(--muted);white-space:nowrap">不正防止</label>
-              <select id="session-fraud-mode" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
-                <option value="none">なし</option>
-                <option value="gps">GPS記録</option>
-              </select>
-            </div>
             <button class="btn btn-succ btn-sm" onclick="startSession()">受付開始</button>
           </div>
           <div id="stop-controls" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
@@ -936,10 +911,6 @@ function openEdit(idOrNull) {
   document.getElementById("edit-required").value = c?.requiredSessions ?? "";
   document.getElementById("edit-late").value      = c?.lateMinutes ?? "";
   // 不正防止設定
-  const fraudMode = c?.fraudPrevention || "none";
-  const fraudEl = document.querySelector(`input[name="fraud-mode"][value="${fraudMode}"]`);
-  if (fraudEl) fraudEl.checked = true;
-  updateFraudUI();
   updateRequiredHint();
 
   // 管理者のみ担当教員選択を表示
@@ -982,7 +953,6 @@ async function saveCourse() {
   const requiredSessions = reqVal ? Number(reqVal) : null;
   const lateVal    = document.getElementById("edit-late").value;
   const lateMinutes = lateVal ? Number(lateVal) : null;
-  const fraudPrevention = document.querySelector('input[name="fraud-mode"]:checked')?.value || "none";
   const courseCode = document.getElementById("edit-coursecode").value.trim();
   const period     = document.getElementById("edit-period").value;
   // 並び順を設定（新規は既存の末尾、編集時は維持）
@@ -993,7 +963,6 @@ async function saveCourse() {
   else data.requiredSessions = null;
   if (lateMinutes) data.lateMinutes = lateMinutes;
   else data.lateMinutes = null;
-  data.fraudPrevention = fraudPrevention;
   try {
     if (id) await db.ref(`courses/${id}`).update(data);
     else    await db.ref("courses").push(data);
@@ -1003,10 +972,6 @@ async function saveCourse() {
 function showEditErr(msg) {
   const el = document.getElementById("edit-err");
   el.textContent = msg; el.classList.add("show");
-}
-function updateFraudUI() {
-  const mode = document.querySelector('input[name="fraud-mode"]:checked')?.value || "none";
-  document.getElementById("fraud-gps-note").style.display = mode === "gps" ? "" : "none";
 }
 
 async function deleteCourse(id, name) {
@@ -1075,12 +1040,6 @@ function renderSessionCode() {
   document.getElementById("code-box-inactive").style.display = active ? "none" : "";
   document.getElementById("code-box-active").style.display   = active ? ""     : "none";
 
-  // 受付前：科目のデフォルト設定をセレクトに反映
-  if (!active) {
-    const defaultFraud = courses[sessionCourseId]?.fraudPrevention || "none";
-    const sel = document.getElementById("session-fraud-mode");
-    if (sel) sel.value = defaultFraud;
-  }
 
   // 自動終了時刻ラベル
   if (active && ses.autoStopTime) {
@@ -1166,14 +1125,12 @@ function stopTimerLoop() { if (timerInterval) { clearInterval(timerInterval); ti
 async function startSession() {
   const timeVal = document.getElementById("auto-stop-time").value;
   const withExit = document.getElementById("exit-confirm-check")?.checked || false;
-  const fraudMode = document.getElementById("session-fraud-mode")?.value || "none";
   const data = {
     sessionIdx:       Number(sessionSelIdx),
     code:             genCode(),
     codeIssuedAt:     Date.now(),
     startedAt:        Date.now(), // 遅刻判定用
     exitConfirmMode:  withExit,   // 退室確認モード設定
-    fraudPrevention:  fraudMode,  // 今回の不正防止設定
   };
   if (timeVal) {
     data.autoStopTime = timeVal; // "HH:MM" 形式
@@ -1284,7 +1241,7 @@ function renderAttendance(allData) {
   }
   document.getElementById("att-body").innerHTML = `
     <table>
-      <thead><tr><th>学籍番号</th><th>登録時刻</th><th>区分</th><th>IPアドレス</th><th>位置情報</th><th></th></tr></thead>
+      <thead><tr><th>学籍番号</th><th>登録時刻</th><th>区分</th><th>IPアドレス</th><th></th></tr></thead>
       <tbody>${records.map(([rid, r]) => {
         const statusBadge =
           r.status === "late"        ? `<span class="tag tag-yellow">△ 遅刻</span>` :
@@ -1296,7 +1253,6 @@ function renderAttendance(allData) {
           <td>${fmtTime(r.time)}</td>
           <td>${statusBadge} ${exitMark}</td>
           <td style="font-size:11px;color:var(--muted)">${esc(r.ip||"―")}</td>
-          <td style="font-size:11px;color:var(--muted)">${r.lat != null ? `<a href="https://maps.google.com/?q=${r.lat},${r.lng}" target="_blank" style="color:var(--accent)">📍地図</a><span style="color:var(--muted)"> ±${r.geoAcc}m</span>` : "―"}</td>
           <td><button class="btn btn-del btn-sm" onclick="deleteRecord('${rid}')">削除</button></td>
         </tr>`;
       }).join("")}</tbody>
@@ -1311,8 +1267,8 @@ async function deleteRecord(rid) {
 function exportCSV() {
   const rows = window._lastRecords || [];
   const statusLabel = r => r.status === "late" ? "遅刻" : r.status === "early_leave" ? "早退" : "出席";
-  const csv  = "\uFEFF学籍番号,登録時刻,区分,退室確認,IPアドレス,緯度,経度,精度(m)\n" +
-    rows.map(r => `${r.studentNo},${fmtTime(r.time)},${statusLabel(r)},${r.exitConfirmed?"済":"―"},${r.ip||""},${r.lat??""},${r.lng??""},${r.geoAcc??""}`).join("\n");
+  const csv  = "\uFEFF学籍番号,登録時刻,区分,退室確認,IPアドレス\n" +
+    rows.map(r => `${r.studentNo},${fmtTime(r.time)},${statusLabel(r)},${r.exitConfirmed?"済":"―"},${r.ip||""}`).join("\n");
   const a    = document.createElement("a");
   a.href     = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
   a.download = `出席_第${sessionSelIdx+1}回.csv`;
@@ -1574,24 +1530,6 @@ function onCourseSelect() {
   renderStudentStatus();
 }
 
-// GPS座標取得（Promiseラッパー）
-function getGeoPosition() {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error("このブラウザは位置情報に対応していません"));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy) }),
-      err => {
-        if (err.code === 1) reject(new Error("位置情報の許可が必要です。ブラウザの設定で位置情報を許可してから再度お試しください。"));
-        else if (err.code === 2) reject(new Error("位置情報を取得できませんでした。電波状況を確認してください。"));
-        else reject(new Error("位置情報の取得がタイムアウトしました。再度お試しください。"));
-      },
-      { timeout: 10000, maximumAge: 0, enableHighAccuracy: true }
-    );
-  });
-}
 
 async function submitAttendance() {
   const courseId  = document.getElementById("stu-course").value;
@@ -1615,29 +1553,13 @@ async function submitAttendance() {
     showErr("この端末からはすでに出席登録済みです"); return;
   }
 
-  // 不正防止チェック
-  // セッション単位の設定 → なければ科目のデフォルト
-  const fraudMode = ses.fraudPrevention || courses[courseId]?.fraudPrevention || "none";
-  let geoData = null;
-
-  // IPアドレス取得（IP制限・記録共通）
+  // IPアドレス取得
   let ip = "取得失敗";
   try {
     const ipRes = await fetch("https://api.ipify.org?format=json");
     const ipJson = await ipRes.json();
     ip = ipJson.ip;
   } catch(e) { ip = "取得失敗"; }
-
-  if (fraudMode === "gps") {
-    // GPS位置情報取得（必須）
-    try {
-      errEl.textContent = "位置情報を取得中..."; errEl.classList.add("show");
-      geoData = await getGeoPosition();
-      errEl.classList.remove("show");
-    } catch(e) {
-      showErr(e.message); return;
-    }
-  }
 
   // トランザクションで二重登録を確実に防止
   // 学籍番号をキーにした専用パスを使い、同時アクセスでも1件しか書き込めない構造にする
@@ -1667,8 +1589,7 @@ async function submitAttendance() {
     // 本データを保存（教員向け出席一覧・CSV用）
     const attRef  = db.ref(`attendance/${courseId}/${Number(ses.sessionIdx)}`);
     const newRef  = attRef.push();
-    const record  = { studentNo, time: new Date().toISOString(), ip, status,
-      lat: geoData?.lat ?? null, lng: geoData?.lng ?? null, geoAcc: geoData?.acc ?? null };
+    const record  = { studentNo, time: new Date().toISOString(), ip, status };
     await newRef.set(record);
 
     // 自分の出席履歴にも保存（学生が自分のデータのみ参照できるパス）
