@@ -562,9 +562,21 @@ function authErrMsg(e) {
 
 async function loginWithGoogle() {
   try {
-    await auth.signInWithRedirect(googleProvider);
+    await auth.signInWithPopup(googleProvider);
   } catch (e) {
-    alert(authErrMsg(e));
+    // ポップアップがブロックされた場合（iOS Safari・iPhoneSE等）はリダイレクトに切り替え
+    const blocked = ["auth/popup-blocked", "auth/popup-closed-by-user",
+                     "auth/cancelled-popup-request",
+                     "auth/operation-not-supported-in-this-environment"];
+    if (blocked.includes(e.code)) {
+      try {
+        await auth.signInWithRedirect(googleProvider);
+      } catch(e2) {
+        alert(authErrMsg(e2));
+      }
+    } else {
+      alert(authErrMsg(e));
+    }
   }
 }
 
@@ -910,7 +922,6 @@ function openEdit(idOrNull) {
   document.getElementById("edit-err").classList.remove("show");
   document.getElementById("edit-required").value = c?.requiredSessions ?? "";
   document.getElementById("edit-late").value      = c?.lateMinutes ?? "";
-  // 不正防止設定
   updateRequiredHint();
 
   // 管理者のみ担当教員選択を表示
@@ -1039,7 +1050,6 @@ function renderSessionCode() {
   document.getElementById("stop-controls").style.display  = active ? "flex" : "none";
   document.getElementById("code-box-inactive").style.display = active ? "none" : "";
   document.getElementById("code-box-active").style.display   = active ? ""     : "none";
-
 
   // 自動終了時刻ラベル
   if (active && ses.autoStopTime) {
@@ -1530,7 +1540,6 @@ function onCourseSelect() {
   renderStudentStatus();
 }
 
-
 async function submitAttendance() {
   const courseId  = document.getElementById("stu-course").value;
   const studentNo = document.getElementById("stu-no").value.trim();
@@ -1553,7 +1562,7 @@ async function submitAttendance() {
     showErr("この端末からはすでに出席登録済みです"); return;
   }
 
-  // IPアドレス取得
+  // IPアドレス取得（チェック前に取得しておく）
   let ip = "取得失敗";
   try {
     const ipRes = await fetch("https://api.ipify.org?format=json");
